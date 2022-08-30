@@ -146,7 +146,7 @@ def create_FLU_layer(SOC_LUT_folder, settings):
     else:
         outdir_CLC_FLU_mapped = Path(SOC_LUT_folder).parent.joinpath('SOC_FLU').joinpath(settings.get('Country'))
 
-    outdir_CLC_FLU_mapped.mkdir(exist_ok=True)
+    outdir_CLC_FLU_mapped.mkdir(parents=True, exist_ok=True)
 
     ### Also create a layer that defines the IPCC land use categories
     ### from CLC
@@ -156,7 +156,7 @@ def create_FLU_layer(SOC_LUT_folder, settings):
     else:
         outdir_CLC_IPCC_LU_category = Path(Basefolder_output_data).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
 
-    outdir_CLC_IPCC_LU_category.mkdir(exist_ok=True)
+    outdir_CLC_IPCC_LU_category.mkdir(parents=True, exist_ok=True)
 
     if ((not os.path.exists(outdir_CLC_FLU_mapped.joinpath(outname_CLC_FLU_mapped)) and not overwrite)\
             or (not os.path.exists(outdir_CLC_IPCC_LU_category.joinpath(outname_CLC_IPCC_LU_category)) and not overwrite)):
@@ -248,7 +248,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
     else:
         outdir_CLC_FLU_mapped = Path(Basefolder_strata_output).joinpath(f'SOC_{type_factor}').joinpath(settings.get('Country'))
 
-    outdir_CLC_FLU_mapped.mkdir(exist_ok=True)
+    outdir_CLC_FLU_mapped.mkdir(parents=True, exist_ok=True)
 
     if not os.path.exists(outdir_CLC_FLU_mapped.joinpath(outname_factor_mapped)) and not overwrite:
         with rasterio.open(CLC_IPCC_LUCAT_dir[0], 'r') as CLC_IPCC_LUCAT_file:
@@ -315,7 +315,7 @@ def create_SOC_scenario_layer(settings):
         outname_SOC_scenario = f'SOC_{settings.get("Scenario_name")}_{settings.get("Country")}.tif'
 
 
-    outfolder.mkdir(exist_ok=True)
+    outfolder.mkdir(parents = True,exist_ok=True)
 
     if os.path.exists(os.path.join(outfolder, outname_SOC_scenario)) and not overwrite:
         logging.info('SOC scenario file already created --> SKIP')
