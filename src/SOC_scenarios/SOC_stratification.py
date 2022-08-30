@@ -24,7 +24,7 @@ def SOC_strat_IPCC(settings):
     #### SOIL, CLIMATE layer should be uploaded
 
     IPCC_folder = os.path.join(Basefolder_input_data,'IPCC', 'IPCC_data_converted')
-    CLC_ref_file = os.path.join(dir_signature,'input_data','general','CLCACC', 'CLC2018ACC_V2018_20.tif')
+
 
     ### search for soil data
     IPCC_files = glob.glob(os.path.join(IPCC_folder, '*.tif'))
@@ -36,26 +36,54 @@ def SOC_strat_IPCC(settings):
     ### apply a resampling and clipping to the data
 
     ### first do the clipping to limit data redundancy
-    mask_raster_extent(soil_file,shp_extent_map, Path(IPCC_folder).joinpath('soil_final_map'),overwrite=False)
-    mask_raster_extent(climate_file, shp_extent_map, Path(IPCC_folder).joinpath('climate_final_map'), overwrite=False)
+    if settings.get('Country') is None:
+        mask_raster_extent(soil_file,shp_extent_map, Path(IPCC_folder).joinpath('soil_final_map')
+                           , settings,overwrite=False)
+        mask_raster_extent(climate_file, shp_extent_map, Path(IPCC_folder).joinpath('climate_final_map'),settings,
+                           overwrite=False)
+        Country = 'EEA39'
+    else:
+        mask_raster_extent(soil_file,settings.get('Country_extent_map'), Path(IPCC_folder).joinpath('soil_final_map')
+                           , settings,overwrite=False, Country_clipping=True)
+        mask_raster_extent(climate_file, settings.get('Country_extent_map'), Path(IPCC_folder).joinpath('climate_final_map'),settings,
+                           overwrite=False, Country_clipping=True)
+        Country = settings.get('Country')
 
     ## now apply the resampling of the files to 100m
-    soil_map_to_resample = glob.glob(os.path.join(IPCC_folder, 'soil_final_map', '*clipped.tif'))
-    climate_map_to_resample = glob.glob(os.path.join(IPCC_folder, 'climate_final_map', '*clipped.tif'))
+    if Country != 'EEA39':
+        soil_map_to_resample = glob.glob(os.path.join(IPCC_folder, 'soil_final_map',Country, '*clipped.tif'))
+        climate_map_to_resample = glob.glob(os.path.join(IPCC_folder, 'climate_final_map',Country, '*clipped.tif'))
+    else:
+        soil_map_to_resample = glob.glob(os.path.join(IPCC_folder, 'soil_final_map', '*clipped.tif'))
+        climate_map_to_resample = glob.glob(os.path.join(IPCC_folder, 'climate_final_map', '*clipped.tif'))
 
-    outfile_name_soil_map_resampled = Path(IPCC_folder).joinpath('soil_final_map').joinpath(Path(soil_map_to_resample[0]).stem.replace('clipped', 'EEA39').replace('1000','100')+'.tif')
-    resample_raster_to_ref(soil_map_to_resample,CLC_ref_file, 'EEA39',outfile_name_soil_map_resampled.parent,
+
+
+    ### IPCC soil resampling
+
+    ### need a reference file with the proper resolution and extent
+    CLC_ref_file = os.path.join(dir_signature,'input_data','general','CLCACC', 'CLC2018ACC_V2018_20.tif')
+    if Country != 'EEA39': ### convert it to the proper extent
+        mask_raster_extent([CLC_ref_file], settings.get('Country_extent_map')
+                           , Path(settings.get('Basefolder_input_data')).joinpath('CLC_ACC'),settings,
+                           overwrite=False, Country_clipping=True)
+        CLC_ref_file = Path(settings.get('Basefolder_input_data')).joinpath('CLC_ACC')\
+                        .joinpath(Country).joinpath('CLC2018ACC_V2018_20_clipped.tif').as_posix()
+
+
+
+    outfile_name_soil_map_resampled = Path(soil_map_to_resample[0]).parent.joinpath(Path(soil_map_to_resample[0]).stem.replace('clipped', Country).replace('1000','100')+'.tif')
+    resample_raster_to_ref(soil_map_to_resample,CLC_ref_file, Country,outfile_name_soil_map_resampled.parent.as_posix(),
                            resample_factor=1, overwrite=overwrite,
-                           outname=outfile_name_soil_map_resampled.name,
-                           resampling=True)
+                           resampling=True,
+                           outname = outfile_name_soil_map_resampled.name)
 
-    outfile_name_climate_resampled = Path(IPCC_folder).joinpath('climate_final_map').joinpath(Path(climate_map_to_resample[0]).stem.replace('clipped', 'EEA39').replace('1000','100')+'.tif')
-    resample_raster_to_ref(climate_map_to_resample,CLC_ref_file, 'EEA39',Path(outfile_name_climate_resampled).parent,
+    ### IPCC climate resampling
+    outfile_name_climate_resampled = Path(climate_map_to_resample[0]).parent.joinpath(Path(climate_map_to_resample[0]).stem.replace('clipped', Country).replace('1000','100')+'.tif')
+    resample_raster_to_ref(climate_map_to_resample,CLC_ref_file, Country,Path(outfile_name_climate_resampled).parent.as_posix(),
                            resample_factor=1, overwrite=overwrite,
-                           outname= Path(outfile_name_climate_resampled).name,
-                           resampling=True)
-
-
+                           resampling=True,
+                           outname=outfile_name_climate_resampled.name)
 
 
     ## store the location of the resampled soil and climate in the settings dictionary
@@ -107,7 +135,8 @@ if __name__ == '__main__':
 
     dir_signature = 'L:'
     overwrite = False
-    SOC_LUT_folder = os.path.join(dir_signature, 'etc', 'lulucf', 'strata', 'SOC_LUT')
+    Basefolder_strata = os.path.join(dir_signature, 'etc', 'lulucf', 'strata')
+    SOC_LUT_folder = os.path.join(Basefolder_strata, 'SOC_LUT')
 
 
     Basefolder_input_data = os.path.join(dir_signature,'etc','lulucf','input_data')
@@ -179,6 +208,11 @@ if __name__ == '__main__':
 
     scenario_name = 'Scenario1'
 
+
+    ### Country_running
+    Country = 'FR' #set to None if want to run entire EEA39 extent
+    shp_Country_borders = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','NUTS_RG_20M_2021_3035.shp'))
+
     #### if you have an input layer for the FMG or FI please set the below parameter to False:
 
     Fixed_factor_FMG = True
@@ -190,15 +224,18 @@ if __name__ == '__main__':
                 'dir_signature': dir_signature,
                 'overwrite': overwrite,
                 'Basefolder_input_data': Basefolder_input_data,
+                'Basefolder_strata': Basefolder_strata,
                 'SOC_method': SOC_method,
                 'EEA_extent_map': shp_extent_map,
+                'Country_extent_map': shp_Country_borders,
                 'CLC_ACC_folder': CLC_ACC_folder,
                 'Stock_change_scenario': dict_stock_change_factors,
                 'SOC_LUT_folder': SOC_LUT_folder,
                 'Fixed_factor_FMG': Fixed_factor_FMG,
                 'Fixed_factor_FI': Fixed_factor_FI,
                 'Scaling': scaling,
-                'Scenario_name': scenario_name}
+                'Scenario_name': scenario_name,
+                'Country': Country}
 
 
     main_stratification(settings)
