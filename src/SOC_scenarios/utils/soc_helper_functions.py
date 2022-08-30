@@ -142,9 +142,9 @@ def create_FLU_layer(SOC_LUT_folder, settings):
     # land use stock change factors
     outname_CLC_FLU_mapped = Path(CLC_ACC_file).stem + '_IPCC_FLU_mapped.tif'
     if settings.get('Country') is None:
-        outdir_CLC_FLU_mapped = Path(SOC_LUT_folder).parent.joinpath('SOC_FLU')
+        outdir_CLC_FLU_mapped = Path(Basefolder_output_data).joinpath('SOC_FLU')
     else:
-        outdir_CLC_FLU_mapped = Path(SOC_LUT_folder).parent.joinpath('SOC_FLU').joinpath(settings.get('Country'))
+        outdir_CLC_FLU_mapped = Path(Basefolder_output_data).joinpath('SOC_FLU').joinpath(settings.get('Country'))
 
     outdir_CLC_FLU_mapped.mkdir(parents=True, exist_ok=True)
 
