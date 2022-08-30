@@ -271,7 +271,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
 
 
         for Crop in factor_scenario.keys():
-            df_factor_IPCC_factors = pd.read_csv(os.path.join(Basefolder_strata_output, 'SOC_LUT', f'IPCC_LUT_factors_{type_factor}_{Crop}.csv'), sep=';')
+            df_factor_IPCC_factors = pd.read_csv(os.path.join(Basefolder_input_data, 'SOC_LUT', f'IPCC_LUT_factors_{type_factor}_{Crop}.csv'), sep=';')
             ## drop locations with no factor given
             df_factor_IPCC_factors_dropna = df_factor_IPCC_factors.mask(df_factor_IPCC_factors.eq('None')) \
                 .dropna(subset=['Factor'])
