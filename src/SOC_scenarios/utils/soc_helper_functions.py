@@ -218,6 +218,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
 
     ### Load the settings
     Basefolder_strata_output = Path(settings.get('Basefolder_strata')).as_posix()
+    Basefolder_input_data = Path(settings.get('Basefolder_input_data')).as_posix()
     factor_scenario = settings.get('Stock_change_scenario')
     path_climate_raster = settings.get('path_IPCC_climate_resampled').as_posix()
     overwrite = settings.get('overwrite')
@@ -230,7 +231,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
     else:
         outdir_IPCC_LUCAT = Path(Basefolder_strata_output).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
     CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_focus"))))
-    df_CLC_FLU_conversion = pd.read_csv(os.path.join(Basefolder_strata_output, 'SOC_LUT', 'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
+    df_CLC_FLU_conversion = pd.read_csv(os.path.join(Basefolder_input_data, 'SOC_LUT', 'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
 
     ### Define the output directory where the result will be stored
     if not fixed_factor_creation:
@@ -238,7 +239,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
     else:
         outname_factor_mapped = f'IPCC_{type_factor}_mapped_scenario'
         for Crop in factor_scenario.keys():
-            df_LUT_factor = pd.read_csv(os.path.join(Basefolder_strata_output, 'SOC_LUT', f'IPCC_LUT_factors_{type_factor}_{Crop}.csv'), sep=';')
+            df_LUT_factor = pd.read_csv(os.path.join(Basefolder_input_data, 'SOC_LUT', f'IPCC_LUT_factors_{type_factor}_{Crop}.csv'), sep=';')
             factor_name = df_LUT_factor.loc[df_LUT_factor[f'IPCC_{type_factor}_id']==factor_scenario.get(Crop).get(type_factor)][[f'IPCC_{type_factor}_name']].values[0][0]
             outname_factor_mapped = outname_factor_mapped + '_'+ Crop + '_' + factor_name
         outname_factor_mapped = outname_factor_mapped + '.tif'
