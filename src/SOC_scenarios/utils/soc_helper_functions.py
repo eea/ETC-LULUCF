@@ -327,9 +327,9 @@ def create_SOC_scenario_layer(settings):
 
     ## SOCREF
     if settings.get('Country') is None:
-        path_SOCREF = Path(Basefolder_LUT).parent.joinpath('SOC_REF').joinpath('SOC_REF_IPCC_climate_soil_100m.tif').as_posix()
+        path_SOCREF = Path(Basefolder_strata_output).joinpath('SOC_REF').joinpath('SOC_REF_IPCC_climate_soil_100m.tif').as_posix()
     else:
-        path_SOCREF = Path(Basefolder_LUT).parent.joinpath('SOC_REF').joinpath(settings.get('Country'))\
+        path_SOCREF = Path(Basefolder_strata_output).parent.joinpath('SOC_REF').joinpath(settings.get('Country'))\
             .joinpath('SOC_REF_IPCC_climate_soil_100m.tif').as_posix()
 
 
