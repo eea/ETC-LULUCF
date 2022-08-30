@@ -217,7 +217,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
     #TODO add part in which the user can plug-in their own management layer, which then will be pre-processed to derive the stock change factors
 
     ### Load the settings
-    Basefolder_strata_output = Path(settings.get('SOC_LUT_folder')).parent.as_posix()
+    Basefolder_strata_output = Path(settings.get('Basefolder_strata')).as_posix()
     factor_scenario = settings.get('Stock_change_scenario')
     path_climate_raster = settings.get('path_IPCC_climate_resampled').as_posix()
     overwrite = settings.get('overwrite')
