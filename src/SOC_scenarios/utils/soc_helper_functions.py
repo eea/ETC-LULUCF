@@ -117,7 +117,7 @@ def create_FLU_layer(SOC_LUT_folder, settings):
     CLC_ACC_folder_Country = Path(settings.get('Basefolder_input_data')).joinpath('CLC_ACC')
     overwrite = settings.get('overwrite')
     path_climate_raster = settings.get('path_IPCC_climate_resampled').as_posix()
-    Basefolder_output_data = settings.get('Basefolder_strata')
+    Basefolder_output_data = settings.get('Basefolder_output')
 
     if settings.get('Country') is None:
         CLC_ACC_file = [item for item in glob.glob(os.path.join(CLC_ACC_folder_original, '*.tif')) if 'CLC{}'.format(str(year_focus)) in Path(item).stem][0]
@@ -217,8 +217,8 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
     #TODO add part in which the user can plug-in their own management layer, which then will be pre-processed to derive the stock change factors
 
     ### Load the settings
-    Basefolder_strata_output = Path(settings.get('Basefolder_strata')).as_posix()
-    Basefolder_input_data = Path(settings.get('Basefolder_input_data')).as_posix()
+    Basefolder_strata_output = Path(settings.get('Basefolder_output')).as_posix()
+    Basefolder_LUT = Path(settings.get('SOC_LUT_folder')).as_posix()
     factor_scenario = settings.get('Stock_change_scenario')
     path_climate_raster = settings.get('path_IPCC_climate_resampled').as_posix()
     overwrite = settings.get('overwrite')
@@ -231,7 +231,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
     else:
         outdir_IPCC_LUCAT = Path(Basefolder_strata_output).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
     CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_focus"))))
-    df_CLC_FLU_conversion = pd.read_csv(os.path.join(Basefolder_input_data, 'SOC_LUT', 'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
+    df_CLC_FLU_conversion = pd.read_csv(os.path.join(Basefolder_LUT, 'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
 
     ### Define the output directory where the result will be stored
     if not fixed_factor_creation:
@@ -239,7 +239,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
     else:
         outname_factor_mapped = f'IPCC_{type_factor}_mapped_scenario'
         for Crop in factor_scenario.keys():
-            df_LUT_factor = pd.read_csv(os.path.join(Basefolder_input_data, 'SOC_LUT', f'IPCC_LUT_factors_{type_factor}_{Crop}.csv'), sep=';')
+            df_LUT_factor = pd.read_csv(os.path.join(Basefolder_LUT, f'IPCC_LUT_factors_{type_factor}_{Crop}.csv'), sep=';')
             factor_name = df_LUT_factor.loc[df_LUT_factor[f'IPCC_{type_factor}_id']==factor_scenario.get(Crop).get(type_factor)][[f'IPCC_{type_factor}_name']].values[0][0]
             outname_factor_mapped = outname_factor_mapped + '_'+ Crop + '_' + factor_name
         outname_factor_mapped = outname_factor_mapped + '.tif'
@@ -271,7 +271,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
 
 
         for Crop in factor_scenario.keys():
-            df_factor_IPCC_factors = pd.read_csv(os.path.join(Basefolder_input_data, 'SOC_LUT', f'IPCC_LUT_factors_{type_factor}_{Crop}.csv'), sep=';')
+            df_factor_IPCC_factors = pd.read_csv(os.path.join(Basefolder_LUT, f'IPCC_LUT_factors_{type_factor}_{Crop}.csv'), sep=';')
             ## drop locations with no factor given
             df_factor_IPCC_factors_dropna = df_factor_IPCC_factors.mask(df_factor_IPCC_factors.eq('None')) \
                 .dropna(subset=['Factor'])
@@ -300,7 +300,8 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
 
 def create_SOC_scenario_layer(settings):
     ### Load the settings
-    SOC_LUT_folder = settings.get('SOC_LUT_folder')
+    Basefolder_LUT = Path(settings.get('SOC_LUT_folder')).as_posix()
+    Basefolder_strata_output = Path(settings.get('Basefolder_output')).as_posix()
     overwrite = settings.get('overwrite')
     factor_scenario = settings.get('Stock_change_scenario')
     scaling = settings.get('Scaling')
@@ -308,11 +309,11 @@ def create_SOC_scenario_layer(settings):
 
     ### Define output name and output dir for scenario SOC
     if settings.get('Country') is None:
-        outfolder = Path(SOC_LUT_folder).parent.joinpath('SOC_scenario')
+        outfolder = Path(Basefolder_strata_output).joinpath('SOC_scenario')
         outname_SOC_scenario = f'SOC_{settings.get("Scenario_name")}_EEA39.tif'
 
     else:
-        outfolder = Path(SOC_LUT_folder).parent.joinpath('SOC_scenario').joinpath(settings.get('Country'))
+        outfolder = Path(Basefolder_strata_output).joinpath('SOC_scenario').joinpath(settings.get('Country'))
         outname_SOC_scenario = f'SOC_{settings.get("Scenario_name")}_{settings.get("Country")}.tif'
 
 
@@ -326,9 +327,9 @@ def create_SOC_scenario_layer(settings):
 
     ## SOCREF
     if settings.get('Country') is None:
-        path_SOCREF = Path(SOC_LUT_folder).parent.joinpath('SOC_REF').joinpath('SOC_REF_IPCC_climate_soil_100m.tif').as_posix()
+        path_SOCREF = Path(Basefolder_LUT).parent.joinpath('SOC_REF').joinpath('SOC_REF_IPCC_climate_soil_100m.tif').as_posix()
     else:
-        path_SOCREF = Path(SOC_LUT_folder).parent.joinpath('SOC_REF').joinpath(settings.get('Country'))\
+        path_SOCREF = Path(Basefolder_LUT).parent.joinpath('SOC_REF').joinpath(settings.get('Country'))\
             .joinpath('SOC_REF_IPCC_climate_soil_100m.tif').as_posix()
 
 
@@ -338,14 +339,14 @@ def create_SOC_scenario_layer(settings):
     def find_fixed_factor_layer(settings,type_factor = 'FMG'):
         lst_factors_selected = []
         for Crop in factor_scenario.keys():
-            df_LUT_factor = pd.read_csv(os.path.join(SOC_LUT_folder, f'IPCC_LUT_factors_{type_factor}_{Crop}.csv'), sep=';')
+            df_LUT_factor = pd.read_csv(os.path.join(Basefolder_LUT, f'IPCC_LUT_factors_{type_factor}_{Crop}.csv'), sep=';')
             factor_name = df_LUT_factor.loc[df_LUT_factor[f'IPCC_{type_factor}_id']==factor_scenario.get(Crop).get(type_factor)][[f'IPCC_{type_factor}_name']].values[0][0]
             lst_factors_selected.append(factor_name)
 
         if settings.get('Country') is None:
-            folder_factor = Path(SOC_LUT_folder).parent.joinpath(f'SOC_{type_factor}')
+            folder_factor = Path(Basefolder_strata_output).joinpath(f'SOC_{type_factor}')
         else:
-            folder_factor = Path(SOC_LUT_folder).parent.joinpath(f'SOC_{type_factor}').joinpath(settings.get('Country'))
+            folder_factor = Path(Basefolder_strata_output).joinpath(f'SOC_{type_factor}').joinpath(settings.get('Country'))
 
 
         # Find now the proper file
@@ -365,9 +366,9 @@ def create_SOC_scenario_layer(settings):
 
     #FLU
     if settings.get('Country') is None:
-        path_FLU = glob.glob(os.path.join(Path(SOC_LUT_folder).parent.as_posix(), 'SOC_FLU', '*_IPCC_FLU_mapped.tif'))
+        path_FLU = glob.glob(os.path.join(Path(Basefolder_strata_output).as_posix(), 'SOC_FLU', '*_IPCC_FLU_mapped.tif'))
     else:
-        path_FLU = glob.glob(os.path.join(Path(SOC_LUT_folder).parent.as_posix(), 'SOC_FLU', settings.get('Country'), '*_IPCC_FLU_mapped.tif'))
+        path_FLU = glob.glob(os.path.join(Path(Basefolder_strata_output).as_posix(), 'SOC_FLU', settings.get('Country'), '*_IPCC_FLU_mapped.tif'))
 
     if len(path_FLU) > 1:
         raise logger.error('MULTIPEL FLU FILES AVAILABLE --> Please check')

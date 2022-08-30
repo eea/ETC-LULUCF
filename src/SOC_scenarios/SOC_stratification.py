@@ -224,7 +224,7 @@ if __name__ == '__main__':
                 'dir_signature': dir_signature,
                 'overwrite': overwrite,
                 'Basefolder_input_data': Basefolder_input_data,
-                'Basefolder_strata': Basefolder_strata,
+                'Basefolder_output': Basefolder_strata,
                 'SOC_method': SOC_method,
                 'EEA_extent_map': shp_extent_map,
                 'Country_extent_map': shp_Country_borders,
