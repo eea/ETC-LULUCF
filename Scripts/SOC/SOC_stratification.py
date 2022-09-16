@@ -6,12 +6,70 @@ import glob
 from pathlib import Path
 import geopandas as gpd
 from loguru import logger
+import numpy as np
 
 from SOC_scenarios.utils.soc_helper_functions import mask_raster_extent\
     , create_SOC_REF_raster, create_FLU_layer, create_factor_layer\
-    ,create_SOC_scenario_layer, resample_raster_to_ref
+    ,create_SOC_scenario_layer, resample_raster_to_ref, mosaic_raster
 
-def SOC_strat_IPCC(settings):
+
+def SOC_strat_IPCC_block_proc(settings: dict):
+    """
+    Function that will calculate the SOC in a block processing way. This function should
+    be enabled if want to run the SOC with scenarios at NUTS level.
+    :param settings: dictionary with the settings needed to run the SOC scenario
+    :return: Output map with the requested SOC scenario
+    """
+    shp_NUTS = settings.get('NUTS_extent_map')
+
+    ### reproject to LAEA of not yet done
+    if shp_NUTS.geometry.crs.srs[-4:] != '3035':
+        shp_NUTS = shp_NUTS.to_crs(epsg=3035)
+
+    if settings.get('Country') is not None:
+        shp_NUTS = shp_NUTS.loc[((shp_NUTS.CNTR_CODE == settings.get('Country')[0:2])& (shp_NUTS.LEVL_CODE == 3))]
+
+    ### LOOP NOW over the available NUTS3 regions in the area that is specified
+
+    #TODO add maybe check if the EEA39 data on FLU, SOCREF, IPCC SOIL & CLIMATE is available
+    shp_NUTS = shp_NUTS.reset_index(drop = True)
+    lst_raster_files = []
+    for index, NUTS3_region in shp_NUTS.iterrows():
+        logger.info(f'CALCULATING SOC FOR NUTS3 REGION: {NUTS3_region.NUTS_ID} \n'
+                    f'{np.round((index/shp_NUTS.shape[0]) *100,2)}% COMPLETED')
+
+        settings.update({'NUTS3_info': NUTS3_region})
+
+        ### create stock change factors specified for NUTS region
+        FMG_layer, meta_FMG_layer = create_factor_layer(settings, type_factor='FMG',
+                                        fixed_factor_creation=True)
+        FI_layer, meta_FI_layer = create_factor_layer(settings, type_factor='FI',
+                                       fixed_factor_creation=True)
+
+        ### add this loaded layer to the settings_file
+        settings.update({'FMG_layer': FMG_layer,
+                         'FMG_meta_layer': meta_FMG_layer,
+                         'FI_layer': FI_layer,
+                         'FI_meta_layer': meta_FI_layer})
+        ### NOW THE FINAL SOC BASED ON THE DEFINED SCENARIO CAN BE CALCULATED
+        lst_raster_files.append(create_SOC_scenario_layer(settings))
+
+    ### Now mosaic all the pieces together
+    mosaic_raster(lst_raster_files, settings)
+
+
+
+
+
+
+def SOC_strat_IPCC_full_extent(settings):
+    """"
+    Function that will calculate the SOC for a specific scenario for the full EEA39 extent
+    So even if country scale processing is enabled first the full extent will be opened to calculate
+    country specific SOC.
+    :param settings: dictionary with the settings needed to run the SOC scenario
+    :return: Output map with the requested SOC scenario
+    """
 
     ### Load the needed variables from the settings file
     Basefolder_input_data = settings.get('Basefolder_input_data')
@@ -43,9 +101,9 @@ def SOC_strat_IPCC(settings):
                            overwrite=False)
         Country = 'EEA39'
     else:
-        mask_raster_extent(soil_file,settings.get('Country_extent_map'), Path(IPCC_folder).joinpath('soil_final_map')
+        mask_raster_extent(soil_file,settings.get('NUTS_extent_map'), Path(IPCC_folder).joinpath('soil_final_map')
                            , settings,overwrite=False, Country_clipping=True)
-        mask_raster_extent(climate_file, settings.get('Country_extent_map'), Path(IPCC_folder).joinpath('climate_final_map'),settings,
+        mask_raster_extent(climate_file, settings.get('NUTS_extent_map'), Path(IPCC_folder).joinpath('climate_final_map'),settings,
                            overwrite=False, Country_clipping=True)
         Country = settings.get('Country')
 
@@ -64,7 +122,7 @@ def SOC_strat_IPCC(settings):
     ### need a reference file with the proper resolution and extent
     CLC_ref_file = os.path.join(dir_signature,'input_data','general','CLCACC', 'CLC2018ACC_V2018_20.tif')
     if Country != 'EEA39': ### convert it to the proper extent
-        mask_raster_extent([CLC_ref_file], settings.get('Country_extent_map')
+        mask_raster_extent([CLC_ref_file], settings.get('NUTS_extent_map')
                            , Path(settings.get('Basefolder_input_data')).joinpath('CLC_ACC'),settings,
                            overwrite=False, Country_clipping=True)
         CLC_ref_file = Path(settings.get('Basefolder_input_data')).joinpath('CLC_ACC')\
@@ -72,23 +130,18 @@ def SOC_strat_IPCC(settings):
 
 
 
-    outfile_name_soil_map_resampled = Path(soil_map_to_resample[0]).parent.joinpath(Path(soil_map_to_resample[0]).stem.replace('clipped', Country).replace('1000','100')+'.tif')
+    outfile_name_soil_map_resampled = settings.get('path_IPCC_soil_resampled')
     resample_raster_to_ref(soil_map_to_resample,CLC_ref_file, Country,outfile_name_soil_map_resampled.parent.as_posix(),
                            resample_factor=1, overwrite=overwrite,
                            resampling=True,
-                           outname = outfile_name_soil_map_resampled.name)
+                           outname=outfile_name_soil_map_resampled.name)
 
     ### IPCC climate resampling
-    outfile_name_climate_resampled = Path(climate_map_to_resample[0]).parent.joinpath(Path(climate_map_to_resample[0]).stem.replace('clipped', Country).replace('1000','100')+'.tif')
+    outfile_name_climate_resampled = settings.get('path_IPCC_climate_resampled')
     resample_raster_to_ref(climate_map_to_resample,CLC_ref_file, Country,Path(outfile_name_climate_resampled).parent.as_posix(),
                            resample_factor=1, overwrite=overwrite,
                            resampling=True,
                            outname=outfile_name_climate_resampled.name)
-
-
-    ## store the location of the resampled soil and climate in the settings dictionary
-    settings.update({'path_IPCC_climate_resampled': outfile_name_climate_resampled,
-                     'path_IPCC_soil_resampled': outfile_name_soil_map_resampled})
 
     ### Now the SOC REF will be created based on IPCC soil and climate data
     create_SOC_REF_raster(settings)
@@ -123,8 +176,12 @@ def main_stratification(settings):
     # uploaded and will be checked if they are all in the same format
 
     SOC_method = settings.get('SOC_method')
-    if SOC_method == 'IPCC':
-        SOC_strat_IPCC(settings)
+    block_based_processing = settings.get('block_based_processing')
+
+    if SOC_method == 'IPCC' and not block_based_processing:
+        SOC_strat_IPCC_full_extent(settings)
+    elif SOC_method == 'IPCC' and block_based_processing:
+        SOC_strat_IPCC_block_proc(settings)
 
 
 if __name__ == '__main__':
@@ -144,6 +201,12 @@ if __name__ == '__main__':
     SOC_method = 'IPCC' ### if the scenarios should be made based on IPCC defaul values
 
     shp_extent_map = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','EEA39_extent_noDOM.shp'))
+
+
+    path_IPCC_climate_resampled = os.path.join(Basefolder_input_data,'IPCC', 'IPCC_data_converted', 'climate_final_map',
+                                                                  'ipcc_climate_zone_100m_EPSG3035_EEA39.tif')
+    path_IPCC_soil_resampled = os.path.join(Basefolder_input_data,'IPCC', 'IPCC_data_converted', 'soil_final_map',
+                                                              'ipcc_soil_type_100m_EPSG3035_EEA39.tif')
 
 
     #LUT CLC IPCC MAPPING
@@ -209,13 +272,8 @@ if __name__ == '__main__':
         'Cropland': {'FMG': 1, 'FI': 2},
         'Grassland': {'FMG': 1, 'FI': 1}}
 
-    ### if want to run with some NUTS specific factors
-    ### set the below parameter to true
-    run_NUTS_specific_scenario = True
-    SOC_NUTS_scenarios_folder = os.path.join(Basefolder_strata,'NUTS_LUT_SOC_scenario')
 
-
-    ### Define if the results should be created by bloc-based
+    ### Define if the results should be created by block-based
     ### processing, meaning only the window for the AOI will
     ### be loaded
     block_based_processing = True
@@ -225,8 +283,14 @@ if __name__ == '__main__':
 
 
     ### Country_running
-    Country = 'NL' #set to None if want to run entire EEA39 extent
-    shp_Country_borders = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','NUTS_RG_20M_2021_3035.shp'))
+    Country = 'BE' #set to None if want to run entire EEA39 extent
+    shp_NUTS_borders = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','NUTS_RG_20M_2021_3035.shp'))
+
+    ### if want to run with some NUTS specific factors
+    ### set the below parameter to true
+    ### if a country is defined only the NUTS regions in that country will be considered
+    run_NUTS_specific_scenario = True
+    SOC_NUTS_scenarios_folder = os.path.join(Basefolder_strata,'NUTS_LUT_SOC_scenario')
 
     #### if you have an input layer for the FMG or FI please set the below parameter to False:
 
@@ -242,7 +306,7 @@ if __name__ == '__main__':
                 'Basefolder_output': Basefolder_strata,
                 'SOC_method': SOC_method,
                 'EEA_extent_map': shp_extent_map,
-                'Country_extent_map': shp_Country_borders,
+                'NUTS_extent_map': shp_NUTS_borders,
                 'CLC_ACC_folder': CLC_ACC_folder,
                 'SOC_NUTS_scenarios_folder': SOC_NUTS_scenarios_folder,
                 'run_NUTS_specific_scenario': run_NUTS_specific_scenario,
@@ -254,7 +318,9 @@ if __name__ == '__main__':
                 'Scaling': scaling,
                 'Scenario_name': scenario_name,
                 'Country': Country,
-                'block_based_processing': block_based_processing}
+                'block_based_processing': block_based_processing,
+                'path_IPCC_climate_resampled': path_IPCC_climate_resampled,
+                'path_IPCC_soil_resampled': path_IPCC_soil_resampled}
 
     main_stratification(settings)
 
