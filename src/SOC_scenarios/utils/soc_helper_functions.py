@@ -3,7 +3,9 @@ from loguru import logger
 import os
 import rasterio
 import rasterio.mask
-import geopandas as gpd
+from rasterio.windows import from_bounds
+from rasterio.merge import merge
+from rasterio import windows
 from pathlib import Path
 import numpy as np
 import gdal
@@ -11,6 +13,7 @@ import subprocess
 import osr
 import pandas as pd
 import glob
+import geopandas as gpd
 
 def compress_file(infile, outfile):
     cmd = f'gdal_translate -co compress=LZW {infile} {outfile}'
@@ -199,6 +202,31 @@ def create_FLU_layer(SOC_LUT_folder, settings):
                 CLC_remap_IPCC_LUCAT[CLC_raster == CLC_ID] = LUCAT_ID
             write_raster(np.expand_dims(CLC_remap_IPCC_LUCAT,0),CLC_meta,CLC_transform,outdir_CLC_IPCC_LU_category, outname_CLC_IPCC_LU_category)
 
+def mosaic_raster(raster_files: list,  settings: dict
+                  , method_overlap: str = 'min'):
+    """
+    Method that will take several overlapping raster layers and create mosiac out of it.
+    :param raster_files: the list of files that should be merged together
+    :param settings: the settings used for processing the data
+    :param method_overlap: the method that should be applied if there are overlapping pixels
+    :return:
+    """
+    mosaic, output = merge(raster_files)
+
+def open_raster_from_window(dir_raster, bounds):
+    with rasterio.open(dir_raster) as src:
+        rst = src.read(1, window=from_bounds(bounds[0],bounds[1],
+                                             bounds[2], bounds[3],
+                                             src.transform))
+        affine = windows.transform(transform=src.transform, window=from_bounds(bounds[0],bounds[1],
+                                                                                 bounds[2], bounds[3],
+                                                                                 src.transform))
+        meta = src.meta
+        meta.update({'height': rst.shape[0],
+                     'width': rst.shape[1],
+                    'transform': affine})
+
+    return rst, meta
 
 
 
@@ -220,13 +248,20 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
     Basefolder_strata_output = Path(settings.get('Basefolder_output')).as_posix()
     Basefolder_LUT = Path(settings.get('SOC_LUT_folder')).as_posix()
     factor_scenario = settings.get('Stock_change_scenario')
-    path_climate_raster = settings.get('path_IPCC_climate_resampled').as_posix()
+    path_climate_raster = settings.get('path_IPCC_climate_resampled')
     overwrite = settings.get('overwrite')
+
+    if settings.get('block_based_processing'):
+        overwrite = False
+        ### get now a dict with the scenario for the NUTS ID and replace it with the default scenario
+        factor_scenario = get_factors_from_NUTS(settings, factor_scenario, type_factor)
+        bounds = settings.get('NUTS3_info').geometry.bounds
+
 
 
     ### First open the FLU layer to know which crops are where located
     ## the combination of the LUT and the CLC FLU mapped layer allows this
-    if settings.get('Country') is None:
+    if settings.get('Country') is None or settings.get('block_based_processing'):
         outdir_IPCC_LUCAT = Path(Basefolder_strata_output).joinpath('CLC_ACC_IPCC')
     else:
         outdir_IPCC_LUCAT = Path(Basefolder_strata_output).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
@@ -244,7 +279,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
             outname_factor_mapped = outname_factor_mapped + '_'+ Crop + '_' + factor_name
         outname_factor_mapped = outname_factor_mapped + '.tif'
 
-    if settings.get('Country') is None:
+    if settings.get('Country') is None or settings.get('block_based_processing'):
         outdir_CLC_FLU_mapped = Path(Basefolder_strata_output).joinpath(f'SOC_{type_factor}')
     else:
         outdir_CLC_FLU_mapped = Path(Basefolder_strata_output).joinpath(f'SOC_{type_factor}').joinpath(settings.get('Country'))
@@ -252,18 +287,24 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
     outdir_CLC_FLU_mapped.mkdir(parents=True, exist_ok=True)
 
     if not os.path.exists(outdir_CLC_FLU_mapped.joinpath(outname_factor_mapped)) and not overwrite:
-        with rasterio.open(CLC_IPCC_LUCAT_dir[0], 'r') as CLC_IPCC_LUCAT_file:
-            CLC_IPCC_LUCAT_raster = CLC_IPCC_LUCAT_file.read(1)
+        if not settings.get('block_based_processing'):
+            with rasterio.open(CLC_IPCC_LUCAT_dir[0], 'r') as CLC_IPCC_LUCAT_file:
+                CLC_IPCC_LUCAT_raster = CLC_IPCC_LUCAT_file.read(1)
 
-        ## now also open the climate raster to know in which climate regime we are
-        with rasterio.open(path_climate_raster, 'r') as climate_file:
-            Climate_raster = climate_file.read(1)
-            meta_raster = climate_file.meta
-            transform_raster = climate_file.transform
+            ## now also open the climate raster to know in which climate regime we are
+            with rasterio.open(path_climate_raster, 'r') as climate_file:
+                Climate_raster = climate_file.read(1)
+                meta_raster = climate_file.meta
+                transform_raster = climate_file.transform
+        else:
+            ### block based opening of raster
+            CLC_IPCC_LUCAT_raster, _ = open_raster_from_window(CLC_IPCC_LUCAT_dir[0], bounds)
+            Climate_raster,  src_climate_raster = open_raster_from_window(path_climate_raster, bounds)
+            meta_raster = src_climate_raster
+            transform_raster = src_climate_raster.get('transform')
+
 
         meta_raster.update({'nodata': 255, 'dtype': 'uint8'})
-
-
 
         ### Create factor raster to write out factors in it
         factor_raster = np.full(CLC_IPCC_LUCAT_raster.shape,255).astype('uint8')
@@ -295,7 +336,10 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
                     logger.info(f'CALCULATING {type_factor} FACTOR FOR FACTOR CATEGORY: {conversion_row[f"IPCC_{type_factor}_id"]} & CLIMATE ID: {conversion_row["IPCC_climate_id"]}')
                     factor_raster[((Climate_raster == IPCC_climate_ID)&(CLC_IPCC_LUCAT_raster == land_use_id))] = IPCC_factor_strata*scaling
 
-        write_raster(np.expand_dims(factor_raster,0),meta_raster,transform_raster,outdir_CLC_FLU_mapped, outname_factor_mapped)
+        if not settings.get('block_based_processing'):
+            write_raster(np.expand_dims(factor_raster,0),meta_raster,transform_raster,outdir_CLC_FLU_mapped, outname_factor_mapped)
+        else:
+            return factor_raster, meta_raster
 
 
 def create_SOC_scenario_layer(settings):
@@ -306,6 +350,10 @@ def create_SOC_scenario_layer(settings):
     factor_scenario = settings.get('Stock_change_scenario')
     scaling = settings.get('Scaling')
 
+    if settings.get('block_based_processing'):
+        bounds = settings.get('NUTS3_info').geometry.bounds
+        NUTS_gpd = gpd.GeoDataFrame(geometry=[settings.get('NUTS3_info').geometry])
+
 
     ### Define output name and output dir for scenario SOC
     if settings.get('Country') is None:
@@ -314,19 +362,25 @@ def create_SOC_scenario_layer(settings):
 
     else:
         outfolder = Path(Basefolder_strata_output).joinpath('SOC_scenario').joinpath(settings.get('Country'))
-        outname_SOC_scenario = f'SOC_{settings.get("Scenario_name")}_{settings.get("Country")}.tif'
+        if settings.get('run_NUTS_specific_scenario') is None:
+            outname_SOC_scenario = f'SOC_{settings.get("Scenario_name")}_{settings.get("Country")}.tif'
+        else:
+            outname_SOC_scenario = f'SOC_{settings.get("Scenario_name")}_{settings.get("Country")}' \
+                                   f'_{settings.get("NUTS3_info")["NUTS_ID"]}.tif'
 
 
     outfolder.mkdir(parents = True,exist_ok=True)
 
     if os.path.exists(os.path.join(outfolder, outname_SOC_scenario)) and not overwrite:
         logging.info('SOC scenario file already created --> SKIP')
+        if settings.get('block_based_processing'):
+            return os.path.join(outfolder, outname_SOC_scenario)
         return
 
     ### Load now the needed datasets for the calculation
 
     ## SOCREF
-    if settings.get('Country') is None:
+    if settings.get('Country') is None or settings.get('block_based_processing'):
         path_SOCREF = Path(Basefolder_strata_output).joinpath('SOC_REF').joinpath('SOC_REF_IPCC_climate_soil_100m.tif').as_posix()
     else:
         path_SOCREF = glob.glob(Path(Basefolder_strata_output).joinpath('SOC_REF').joinpath(settings.get('Country'))\
@@ -359,42 +413,61 @@ def create_SOC_scenario_layer(settings):
 
         return path_factor[0]
 
-    if settings.get('Fixed_factor_FMG'):
+    if settings.get('Fixed_factor_FMG') and not settings.get('block_based_processing'):
         path_FMG = find_fixed_factor_layer(settings,type_factor='FMG')
-    if settings.get('Fixed_factor_FI'):
+    if settings.get('Fixed_factor_FI') and not settings.get('block_based_processing'):
         path_FI = find_fixed_factor_layer(settings,type_factor='FI')
 
     #FLU
-    if settings.get('Country') is None:
+    if settings.get('Country') is None or settings.get('block_based_processing'):
         path_FLU = glob.glob(os.path.join(Path(Basefolder_strata_output).as_posix(), 'SOC_FLU', '*_IPCC_FLU_mapped.tif'))
     else:
         path_FLU = glob.glob(os.path.join(Path(Basefolder_strata_output).as_posix(), 'SOC_FLU', settings.get('Country'), '*_IPCC_FLU_mapped.tif'))
 
     if len(path_FLU) > 1:
-        raise logger.error('MULTIPEL FLU FILES AVAILABLE --> Please check')
+        raise logger.error('MULTIPLE FLU FILES AVAILABLE --> Please check')
     path_FLU = path_FLU[0]
 
 
     ### Now that all locations for the rasters are defined it can be opened
 
-    FMG_layer = rasterio.open(path_FMG).read(1)
-    no_data_FMG = rasterio.open(path_FMG).meta.get('nodata')
-    FI_layer = rasterio.open(path_FI).read(1)
-    no_data_FI = rasterio.open(path_FI).meta.get('nodata')
-    SOCref_layer = rasterio.open(path_SOCREF).read(1)
-    no_data_SOCref = rasterio.open(path_SOCREF).meta.get('nodata')
-    FLU_layer = rasterio.open(path_FLU).read(1)
-    no_data_FLU = rasterio.open(path_FLU).meta.get('nodata')
+    if not settings.get('block_based_processing'):
+        FMG_layer = rasterio.open(path_FMG).read(1)
+        FI_layer = rasterio.open(path_FI).read(1)
+        FLU_layer = rasterio.open(path_FLU).read(1)
+        SOCref_layer = rasterio.open(path_SOCREF).read(1)
+
+        no_data_FMG = rasterio.open(path_FMG).meta.get('nodata')
+        no_data_FI = rasterio.open(path_FI).meta.get('nodata')
+        no_data_SOCref = rasterio.open(path_SOCREF).meta.get('nodata')
+        no_data_FLU = rasterio.open(path_FLU).meta.get('nodata')
+
+        out_SOC_transform = rasterio.open(path_FMG).transform
+        out_SOC_meta = rasterio.open(path_FMG).meta
+
+    else:
+        FMG_layer = settings.get('FMG_layer')
+        no_data_FMG = settings.get('FMG_meta_layer').get('nodata')
+        FI_layer = settings.get('FI_layer')
+        no_data_FI = settings.get('FI_meta_layer').get('nodata')
+        FLU_layer, FLU_meta = open_raster_from_window(path_FLU, bounds)
+        no_data_FLU = FLU_meta.get('nodata')
+        SOCref_layer, SOCref_meta = open_raster_from_window(path_SOCREF, bounds)
+        no_data_SOCref = SOCref_meta.get('nodata')
+
+        out_SOC_transform = settings.get('FI_meta_layer').get('transform')
+        out_SOC_meta = settings.get('FI_meta_layer')
 
 
-    out_SOC_transform = rasterio.open(path_FMG).transform
-    out_SOC_meta = rasterio.open(path_FMG).meta
+
+
+
+
+
     spatial_resolution = out_SOC_transform[0]
 
     ### Now apply the formula for SOC (2.25 IPCC) (ton C/ha)
     logger.info('CALCULATE SOCREF')
-
-    SOC_raster = np.full(SOCref_layer.shape,65535).astype('uint16')
 
     ### the area of each pixel in hectares
     A_pixel_ha = int(((spatial_resolution**2) / 10000))
@@ -416,6 +489,47 @@ def create_SOC_scenario_layer(settings):
                  ,Path(outname_SOC_scenario).name)
 
 
+    ### apply a cropping of the raster so that cells outside the extent are set to nodata
+    if settings.get('block_based_processing'):
+        outdir_raster = Path(outfolder).joinpath(Path(outname_SOC_scenario).name).as_posix()
+        mask_raster_extent([Path(outfolder).joinpath(Path(outname_SOC_scenario).name).as_posix()],NUTS_gpd,
+                           Path(outfolder), settings, overwrite= overwrite)
+        ## remove the unclipped file and the rename the clipped file to the final output name
+        os.remove(outdir_raster)
+        os.rename(Path(outfolder).joinpath(Path(outname_SOC_scenario).stem + '_clipped.tif').as_posix(),
+                  outdir_raster)
+
+        return outdir_raster
+
+
+
+
+def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_factor: str) -> dict:
+    folder = settings.get('SOC_NUTS_scenarios_folder')
+    NUTS_info = settings.get('NUTS3_info')
+
+    dict_scenario = {}
+    for crop in dict_default_scenario.keys():
+        file_dir_NUTS3 = glob.glob(os.path.join(folder, 'NUTS_LEVEL3_SOC_scenarios_{}.csv'.format(crop.lower())))
+        file_dir_NUTS0 = glob.glob(os.path.join(folder, 'NUTS_LEVEL0_SOC_scenarios_{}.csv'.format(crop.lower())))
+
+        df_NUTS3 = pd.read_csv(file_dir_NUTS3[0], sep=';')
+        df_NUTS0 = pd.read_csv(file_dir_NUTS0[0], sep=';')
+
+        factor_NUTS3 = df_NUTS3.loc[df_NUTS3['NUTS_LEVEL3_ID'] == NUTS_info.NUTS_ID][type_factor].values[0]
+
+        ### if factor is not defined at NUTS3 level check if it is at NUTS0 LEVEL
+        if pd.isnull(factor_NUTS3):
+            factor_NUTS0 = df_NUTS0.loc[df_NUTS0['NUTS_LEVEL0_ID'] == NUTS_info.CNTR_CODE][type_factor].values[0]
+
+            if pd.isnull(factor_NUTS0):
+                dict_scenario.update({crop:{type_factor: dict_default_scenario.get(crop).get(type_factor)}})
+            else:
+                dict_scenario.update({crop:{type_factor: factor_NUTS0}})
+        else:
+            dict_scenario.update({crop:{type_factor: factor_NUTS3}})
+
+    return dict_scenario
 
 
 
