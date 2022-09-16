@@ -202,15 +202,30 @@ if __name__ == '__main__':
 
     ## One of the LU categories can be removed from the dictionary
     # if only want to do the estimation for one of the classes
-    dict_stock_change_factors = {
+
+    #### use some default factors for EU LEVEL
+    run_default_scenario = False
+    dict_default_stock_change_factors = {
         'Cropland': {'FMG': 1, 'FI': 2},
         'Grassland': {'FMG': 1, 'FI': 1}}
+
+    ### if want to run with some NUTS specific factors
+    ### set the below parameter to true
+    run_NUTS_specific_scenario = True
+    SOC_NUTS_scenarios_folder = os.path.join(Basefolder_strata,'NUTS_LUT_SOC_scenario')
+
+
+    ### Define if the results should be created by bloc-based
+    ### processing, meaning only the window for the AOI will
+    ### be loaded
+    block_based_processing = True
+
 
     scenario_name = 'Scenario1'
 
 
     ### Country_running
-    Country = 'FR' #set to None if want to run entire EEA39 extent
+    Country = 'NL' #set to None if want to run entire EEA39 extent
     shp_Country_borders = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','NUTS_RG_20M_2021_3035.shp'))
 
     #### if you have an input layer for the FMG or FI please set the below parameter to False:
@@ -229,14 +244,17 @@ if __name__ == '__main__':
                 'EEA_extent_map': shp_extent_map,
                 'Country_extent_map': shp_Country_borders,
                 'CLC_ACC_folder': CLC_ACC_folder,
-                'Stock_change_scenario': dict_stock_change_factors,
+                'SOC_NUTS_scenarios_folder': SOC_NUTS_scenarios_folder,
+                'run_NUTS_specific_scenario': run_NUTS_specific_scenario,
+                'run_default_scenario': run_default_scenario,
+                'Stock_change_scenario': dict_default_stock_change_factors,
                 'SOC_LUT_folder': SOC_LUT_folder,
                 'Fixed_factor_FMG': Fixed_factor_FMG,
                 'Fixed_factor_FI': Fixed_factor_FI,
                 'Scaling': scaling,
                 'Scenario_name': scenario_name,
-                'Country': Country}
-
+                'Country': Country,
+                'block_based_processing': block_based_processing}
 
     main_stratification(settings)
 
