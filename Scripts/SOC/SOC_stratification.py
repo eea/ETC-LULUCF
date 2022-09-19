@@ -5,12 +5,14 @@ import os
 import glob
 from pathlib import Path
 import geopandas as gpd
+import pandas as pd
 from loguru import logger
 import numpy as np
 
 from SOC_scenarios.utils.soc_helper_functions import mask_raster_extent\
     , create_SOC_REF_raster, create_FLU_layer, create_factor_layer\
-    ,create_SOC_scenario_layer, resample_raster_to_ref, mosaic_raster
+    ,create_SOC_scenario_layer, resample_raster_to_ref, mosaic_raster\
+    , calc_stats_SOC_NUTS, calc_weighted_average_NUTS
 
 
 def SOC_strat_IPCC_block_proc(settings: dict):
@@ -34,6 +36,7 @@ def SOC_strat_IPCC_block_proc(settings: dict):
     #TODO add maybe check if the EEA39 data on FLU, SOCREF, IPCC SOIL & CLIMATE is available
     shp_NUTS = shp_NUTS.reset_index(drop = True)
     lst_raster_files = []
+    lst_NUTS_stats = []
     for index, NUTS3_region in shp_NUTS.iterrows():
         logger.info(f'CALCULATING SOC FOR NUTS3 REGION: {NUTS3_region.NUTS_ID} \n'
                     f'{np.round((index/shp_NUTS.shape[0]) *100,2)}% COMPLETED')
@@ -52,10 +55,51 @@ def SOC_strat_IPCC_block_proc(settings: dict):
                          'FI_layer': FI_layer,
                          'FI_meta_layer': meta_FI_layer})
         ### NOW THE FINAL SOC BASED ON THE DEFINED SCENARIO CAN BE CALCULATED
-        lst_raster_files.append(create_SOC_scenario_layer(settings))
+
+        outdir_SOC_raster = create_SOC_scenario_layer(settings)
+        lst_raster_files.append(outdir_SOC_raster)
+
+        ### check if some stats of the map need to be provided
+        if settings.get('add_stats_NUTS_level') is not None:
+
+            df_stats_NUTS = calc_stats_SOC_NUTS(outdir_SOC_raster, NUTS3_region,
+                              settings)
+            lst_NUTS_stats.append(df_stats_NUTS)
+
+
+    if settings.get('add_stats_NUTS_level') is not None:
+
+        ### define output folder for writing the result
+        if settings.get('Country') is not None:
+            outfolder = Path(settings.get('Basefolder_output')).joinpath('SOC_NUTS_stats').joinpath(settings.get('Country'))
+            outname = f'SOC_stats_NUTS_{settings.get("Country")}.shp'
+
+        else:
+            outfolder = Path(settings.get('Basefolder_output')).joinpath('SOC_NUTS_stats')
+            outname = 'SOC_stats_NUTS_EEA39.shp'
+
+        outfolder.mkdir(parents=True, exist_ok=True)
+
+        df_stats_all_NUTS3 = pd.concat(lst_NUTS_stats)
+
+        ## now that the NUTS3 is calculated also the weighted average at NUTS LEVEL0 can be derived
+        df_stats_NUTS_final = calc_weighted_average_NUTS(df_stats_all_NUTS3, settings.get('NUTS_extent_map'))
+
+
+
+        ## create now geodataframe out of it and write out the result
+        gpd_NUTS_stats = gpd.GeoDataFrame(df_stats_NUTS_final, geometry=df_stats_NUTS_final.geometry)
+
+
+
+        ## write out the result
+        gpd_NUTS_stats.crs = shp_NUTS.crs
+        gpd_NUTS_stats.to_file(Path(outfolder).joinpath(outname))
 
     ### Now mosaic all the pieces together
     mosaic_raster(lst_raster_files, settings)
+
+
 
 
 
@@ -285,12 +329,19 @@ if __name__ == '__main__':
     ### Country_running
     Country = 'BE' #set to None if want to run entire EEA39 extent
     shp_NUTS_borders = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','NUTS_RG_20M_2021_3035.shp'))
+    ### filter only on the NUTS levels of interest
+    shp_NUTS_borders = shp_NUTS_borders.loc[shp_NUTS_borders.LEVL_CODE.isin([0,3])]
+
 
     ### if want to run with some NUTS specific factors
     ### set the below parameter to true
     ### if a country is defined only the NUTS regions in that country will be considered
     run_NUTS_specific_scenario = True
     SOC_NUTS_scenarios_folder = os.path.join(Basefolder_strata,'NUTS_LUT_SOC_scenario')
+
+
+    #### Indicate of stats at NUTS LEVEL need to be provided
+    add_stats_NUTS_level = True
 
     #### if you have an input layer for the FMG or FI please set the below parameter to False:
 
@@ -320,7 +371,8 @@ if __name__ == '__main__':
                 'Country': Country,
                 'block_based_processing': block_based_processing,
                 'path_IPCC_climate_resampled': path_IPCC_climate_resampled,
-                'path_IPCC_soil_resampled': path_IPCC_soil_resampled}
+                'path_IPCC_soil_resampled': path_IPCC_soil_resampled,
+                'add_stats_NUTS_level': add_stats_NUTS_level}
 
     main_stratification(settings)
 

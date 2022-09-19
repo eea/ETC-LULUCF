@@ -13,6 +13,7 @@ import osr
 import pandas as pd
 import glob
 import geopandas as gpd
+from rasterstats import zonal_stats
 
 def compress_file(infile, outfile):
     cmd = f'gdal_translate -co compress=LZW {infile} {outfile}'
@@ -709,6 +710,117 @@ def rescale_raster(raster_file,outdir, rescale_factor):
         write_raster(np.expand_dims(out_image,0), out_meta, out_transform, outdir, outname)
 
     return os.path.join(outdir, outname)
+
+
+
+
+
+def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
+                      settings: dict, stats_type: list = ['mean', 'count']) -> pd.DataFrame:
+    """
+    :param raster_dir: the directory of the raster on which the stats should be calculated
+    :param spatial_layer: the geospatial layer that will be used to determine the areas for aggregation
+    :param settings: dictionary with some settings that are needed to do the aggregation
+    :param stats_type: indicate the type of statistics should be derived from the raster
+    :return: dataframe with the calculated stats
+    """
+
+    raster_object = rasterio.open(raster_dir)
+    raster_values = raster_object.read(1)
+    affine = raster_object.meta.get('transform')
+    no_data = raster_object.meta.get('nodata')
+
+    ### Open the FLU layer on which a distinction is made
+    ### per IPCC LU type
+    if settings.get('Country') is None or settings.get('block_based_processing'):
+        outdir_IPCC_LUCAT = Path(settings.get('Basefolder_output')).joinpath('CLC_ACC_IPCC')
+    else:
+        outdir_IPCC_LUCAT = Path(settings.get('Basefolder_output')).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
+
+    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_focus"))))[0]
+
+
+    FLU_raster, meta = open_raster_from_window(CLC_IPCC_LUCAT_dir, spatial_layer.geometry.bounds)
+
+    ### open the dataframe that gives the linkage between the FLU ID and name
+    df_FLU_mapping = pd.read_csv(os.path.join(settings.get('SOC_LUT_folder')
+                                              ,'IPCC_FLU_CLC_mapping_LUT.csv'), sep = ';')
+    lst_df_stats_NUTS = []
+    for FLU_class in df_FLU_mapping['IPCC_landuse_id'].unique():
+        raster_values_FLU_filter = np.copy(raster_values)
+        raster_values_FLU_filter[np.where(FLU_raster != FLU_class)] = no_data
+        stats = zonal_stats(spatial_layer.geometry, raster_values_FLU_filter, affine=affine,
+                        nodata=no_data, stats=stats_type)
+        df_stats = pd.DataFrame.from_dict(stats)
+        df_stats.columns = ['SOC_mean', 'nr_pixels']
+        # derive the croptype for which the stats are calculated
+        df_stats['croptype'] = df_FLU_mapping.loc[df_FLU_mapping['IPCC_landuse_id'] == FLU_class]\
+                                                    ['IPCC_landuse_name'].values[0]
+        df_stats['NUTS_ID'] = spatial_layer.NUTS_ID
+        df_stats['NUTS_LEVEL'] = spatial_layer.LEVL_CODE
+        df_stats['geometry'] = [spatial_layer.geometry]
+        lst_df_stats_NUTS.append(df_stats)
+
+    return pd.concat(lst_df_stats_NUTS)
+
+
+def calc_weighted_average_NUTS(df_stats_NUTS_small: pd.DataFrame, NUTS_layer: gpd,
+                               level_focus: int = 0) -> pd.DataFrame:
+    """
+    Function that will calculate the weighed average based on the sub NUTS regions of a bigger NUTS area
+    :param df_stats_NUTS_small: dataframe in which the statistics of the subareas will be merged
+    :param NUTS_layer: geospatial with all the available NUTS layers
+    :param level_focus: the level on which the weighted average should be calculated.
+    :return: dataframe that contains also the weighted average over the requested NUTS area
+    """
+
+    ## update the dataframe with the match between the smaller NUTS regions and the bigger ones
+    rows = []
+    for i, row in df_stats_NUTS_small.iterrows():
+        NUTS_ID_small = row.NUTS_ID
+        NUTS_ID_match = NUTS_layer.loc[NUTS_layer.NUTS_ID == NUTS_ID_small]['CNTR_CODE'].values[0]
+        NUTS_ID_match_pd = pd.Series(NUTS_ID_match, index = [f'NUTS_region_LEVEL{str(level_focus)}'])
+        rows.append(pd.DataFrame(pd.concat([row, NUTS_ID_match_pd])).T)
+
+    df_NUTS3_matched = pd.concat(rows)
+    df_NUTS3_matched = df_NUTS3_matched.reset_index(drop=True)
+
+
+    ### calc now the weighted average per unique NUTS region
+
+    # save the stats of the big NUTS area in a list and merge it together with the stats of the smaller NUTS areas
+    lst_stats_all_NUTS = []
+    for NUTS_big_region in df_NUTS3_matched[f'NUTS_region_LEVEL{str(level_focus)}'].unique():
+        for croptype in df_stats_NUTS_small['croptype'].unique():
+            #derive weight per subarea for the calculation
+            df_NUTS3_matched_filter = df_NUTS3_matched\
+                                        .loc[((df_NUTS3_matched[f'NUTS_region_LEVEL{str(level_focus)}'] == NUTS_big_region)
+                                              & (df_NUTS3_matched['croptype']== croptype))]
+            if df_NUTS3_matched_filter.empty:
+                continue
+
+            df_NUTS3_matched_filter = df_NUTS3_matched_filter.dropna()
+            tot_pixel = df_NUTS3_matched_filter['nr_pixels'].sum()
+            df_NUTS3_matched_filter['weight'] = df_NUTS3_matched_filter['nr_pixels']/ tot_pixel
+            mean_value_NUTS_region = (df_NUTS3_matched_filter['weight'] * df_NUTS3_matched_filter['SOC_mean']).mean()
+            df_stats_NUTS_region = pd.DataFrame([mean_value_NUTS_region], columns= ['SOC_mean'])
+            df_stats_NUTS_region['nr_pixels'] = [tot_pixel]
+            df_stats_NUTS_region['croptype'] = [croptype]
+            df_stats_NUTS_region['NUTS_LEVEL'] = [str(level_focus)]
+            df_stats_NUTS_region['NUTS_ID'] = [NUTS_big_region]
+            df_stats_NUTS_region['geometry'] = NUTS_layer.loc[NUTS_layer.NUTS_ID == NUTS_big_region].geometry.values[0]
+            lst_stats_all_NUTS.append(df_stats_NUTS_region)
+
+    df_stats_big_NUTS_region = pd.concat(lst_stats_all_NUTS)
+
+    ### now join with the stats of the small NUTS area
+
+    df_final_stats = pd.concat([df_stats_big_NUTS_region, df_stats_NUTS_small])
+    df_final_stats = df_final_stats.reset_index(drop=True)
+
+    return df_final_stats
+
+
 
 
 
