@@ -4,7 +4,6 @@ import os
 import rasterio
 import rasterio.mask
 from rasterio.windows import from_bounds
-from rasterio.merge import merge
 from rasterio import windows
 from pathlib import Path
 import numpy as np
@@ -203,15 +202,38 @@ def create_FLU_layer(SOC_LUT_folder, settings):
             write_raster(np.expand_dims(CLC_remap_IPCC_LUCAT,0),CLC_meta,CLC_transform,outdir_CLC_IPCC_LU_category, outname_CLC_IPCC_LU_category)
 
 def mosaic_raster(raster_files: list,  settings: dict
-                  , method_overlap: str = 'min'):
+                  , remove_subsets: bool = False):
     """
     Method that will take several overlapping raster layers and create mosiac out of it.
     :param raster_files: the list of files that should be merged together
     :param settings: the settings used for processing the data
-    :param method_overlap: the method that should be applied if there are overlapping pixels
+    :param remove_subsets: Define if the subwindows used for merging should be retained or not
     :return:
     """
-    mosaic, output = merge(raster_files)
+
+    #### use gdal_merge for mosaicking the data together
+    if settings.get('Country') is not None:
+        outdir = Path(settings.get('Basefolder_output')).joinpath('SOC_scenario').joinpath(settings.get('Country'))
+        outname = settings.get('Scenario_name') + f'_{settings.get("Country")}.tif'
+    else:
+        outdir = Path(settings.get('Basefolder_output')).joinpath('SOC_scenario')
+        outname = settings.get('Scenario_name') + '_EEA39.tif'
+
+    ### derive nodata value that should be ignored with the merging
+    no_data = rasterio.open(raster_files[0]).meta.get('nodata')
+
+    merge_command = f'gdal_merge.py -n {no_data} -a_nodata {no_data} -co compress=LZW' \
+              f' -o {outdir.joinpath(outname).as_posix()} {" " .join(raster_files)}'
+
+
+    os.system(merge_command)
+
+    ### remove now the block based procesed data
+
+    if remove_subsets:
+        for file in raster_files:
+            os.remove(file)
+
 
 def open_raster_from_window(dir_raster, bounds):
     with rasterio.open(dir_raster) as src:
