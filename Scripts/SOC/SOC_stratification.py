@@ -28,7 +28,10 @@ def SOC_strat_IPCC_block_proc(settings: dict):
     shp_NUTS = shp_NUTS.loc[shp_NUTS.LEVL_CODE.isin([0,3])]
 
     ### reproject to LAEA of not yet done
-    if shp_NUTS.geometry.crs.srs[-4:] != '3035':
+    crs = shp_NUTS.geometry.crs
+    if crs is None:
+        shp_NUTS = shp_NUTS.to_crs(epsg=3035)
+    elif crs.srs[-4:] != '3035':
         shp_NUTS = shp_NUTS.to_crs(epsg=3035)
 
     if settings.get('Country') is not None:
