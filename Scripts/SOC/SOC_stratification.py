@@ -131,11 +131,6 @@ def SOC_strat_IPCC_block_proc(settings: dict):
 
 
 
-
-
-
-
-
 def SOC_strat_IPCC_full_extent(settings):
     """"
     Function that will calculate the SOC for a specific scenario for the full EEA39 extent
@@ -400,7 +395,7 @@ if __name__ == '__main__':
                 'path_IPCC_climate_resampled': path_IPCC_climate_resampled,
                 'path_IPCC_soil_resampled': path_IPCC_soil_resampled,
                 'add_stats_NUTS_level': add_stats_NUTS_level,
-                'commit_id': 'd0f6a6e0b4a48dc38c130f295a8bd8cd8b0f0f60'}
+                'commit_id': 'e0f29ffec7fead9b1eacb4a5324ca76fe6c981fc'}
 
     main_stratification(settings)
 
