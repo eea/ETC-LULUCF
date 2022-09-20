@@ -804,11 +804,11 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
         ### Assign also used FMG & FI factors to shapefile
         dict_FMG_factors_info = get_factors_from_NUTS(settings, settings.get('Stock_change_scenario'), 'FMG')
         df_stats['FMG_factor'] = dict_FMG_factors_info.get(croptype).get('FMG')
-        df_stats['FMG_factor_source'] = dict_FMG_factors_info.get(croptype).get('input_source')
+        df_stats['FMG_src'] = dict_FMG_factors_info.get(croptype).get('input_source')
 
         dict_FI_factors_info = get_factors_from_NUTS(settings, settings.get('Stock_change_scenario'), 'FI')
         df_stats['FI_factor'] = dict_FI_factors_info.get(croptype).get('FI')
-        df_stats['FI_factor_source'] = dict_FI_factors_info.get(croptype).get('input_source')
+        df_stats['FI_src'] = dict_FI_factors_info.get(croptype).get('input_source')
 
         df_stats['geometry'] = [spatial_layer.geometry]
         lst_df_stats_NUTS.append(df_stats)
@@ -854,7 +854,8 @@ def calc_weighted_average_NUTS(df_stats_NUTS_small: pd.DataFrame, NUTS_layer: gp
             df_NUTS3_matched_filter = df_NUTS3_matched_filter.dropna()
             tot_pixel = df_NUTS3_matched_filter['nr_pixels'].sum()
             df_NUTS3_matched_filter['weight'] = df_NUTS3_matched_filter['nr_pixels']/ tot_pixel
-            mean_value_NUTS_region = (df_NUTS3_matched_filter['weight'] * df_NUTS3_matched_filter['SOC_mean']).mean()
+            mean_value_NUTS_region = np.round((df_NUTS3_matched_filter['weight']
+                                               * df_NUTS3_matched_filter['SOC_mean']).mean(),2)
             df_stats_NUTS_region = pd.DataFrame([mean_value_NUTS_region], columns= ['SOC_mean'])
             df_stats_NUTS_region['nr_pixels'] = [tot_pixel]
             df_stats_NUTS_region['croptype'] = [croptype]
