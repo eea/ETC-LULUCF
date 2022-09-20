@@ -260,7 +260,7 @@ if __name__ == '__main__':
     ### Some default settings
 
     dir_signature = 'L:'
-    overwrite = True
+    overwrite = False
     Basefolder_strata = os.path.join(dir_signature, 'etc', 'lulucf', 'strata')
     SOC_LUT_folder = os.path.join(Basefolder_strata, 'SOC_LUT')
 
@@ -361,7 +361,7 @@ if __name__ == '__main__':
     ### set the below parameter to true
     ### if a country is defined only the NUTS regions in that country will be considered
     run_NUTS_specific_scenario = True
-    SOC_NUTS_scenarios_folder = os.path.join(Basefolder_strata,'NUTS_LUT_SOC_scenario')
+    SOC_NUTS_factors_folder = os.path.join(Basefolder_strata,'NUTS_LUT_SOC_scenario')
 
 
     #### Indicate of stats at NUTS LEVEL need to be provided
@@ -382,7 +382,7 @@ if __name__ == '__main__':
                 'EEA_extent_map': shp_extent_map,
                 'NUTS_extent_map': shp_NUTS_borders,
                 'CLC_ACC_folder': CLC_ACC_folder,
-                'SOC_NUTS_scenarios_folder': SOC_NUTS_scenarios_folder,
+                'SOC_NUTS_factors_folder': SOC_NUTS_factors_folder,
                 'run_NUTS_specific_scenario': run_NUTS_specific_scenario,
                 'Stock_change_scenario': dict_default_stock_change_factors,
                 'SOC_LUT_folder': SOC_LUT_folder,
