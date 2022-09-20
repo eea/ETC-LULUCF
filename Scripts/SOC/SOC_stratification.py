@@ -30,7 +30,7 @@ def SOC_strat_IPCC_block_proc(settings: dict):
     ### reproject to LAEA of not yet done
     crs = shp_NUTS.geometry.crs
     if crs is None:
-        shp_NUTS = shp_NUTS.to_crs(epsg=3035)
+        shp_NUTS.crs = shp_NUTS.crs(epsg=3035)
     elif crs.srs[-4:] != '3035':
         shp_NUTS = shp_NUTS.to_crs(epsg=3035)
 
