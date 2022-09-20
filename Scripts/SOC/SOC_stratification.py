@@ -24,6 +24,8 @@ def SOC_strat_IPCC_block_proc(settings: dict):
     :return: Output map with the requested SOC scenario
     """
     shp_NUTS = settings.get('NUTS_extent_map')
+    ### filter only on the NUTS levels of interest
+    shp_NUTS = shp_NUTS.loc[shp_NUTS.LEVL_CODE.isin([0,3])]
 
     ### reproject to LAEA of not yet done
     if shp_NUTS.geometry.crs.srs[-4:] != '3035':
@@ -353,8 +355,7 @@ if __name__ == '__main__':
     ### Country_running
     Country = None #set to None if want to run entire EEA39 extent
     shp_NUTS_borders = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','NUTS_RG_20M_2021_3035.shp'))
-    ### filter only on the NUTS levels of interest
-    shp_NUTS_borders = shp_NUTS_borders.loc[shp_NUTS_borders.LEVL_CODE.isin([0,3])]
+
 
 
     ### if want to run with some NUTS specific factors
@@ -395,7 +396,7 @@ if __name__ == '__main__':
                 'path_IPCC_climate_resampled': path_IPCC_climate_resampled,
                 'path_IPCC_soil_resampled': path_IPCC_soil_resampled,
                 'add_stats_NUTS_level': add_stats_NUTS_level,
-                'commit_id': 'e0f29ffec7fead9b1eacb4a5324ca76fe6c981fc'}
+                'commit_id': 'bcfbc8fe0eb6318c51f34ebc7a57e5f37e1d7230'}
 
     main_stratification(settings)
 
