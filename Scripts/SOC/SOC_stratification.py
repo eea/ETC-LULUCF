@@ -12,12 +12,13 @@ import numpy as np
 from SOC_scenarios.utils.soc_helper_functions import mask_raster_extent\
     , create_SOC_REF_raster, create_FLU_layer, create_factor_layer\
     ,create_SOC_scenario_layer, resample_raster_to_ref, mosaic_raster\
-    , calc_stats_SOC_NUTS, calc_weighted_average_NUTS
+    , calc_stats_SOC_NUTS, calc_weighted_average_NUTS, \
+    create_metadata_description_SOC, add_metadata_raster
 
 
 def SOC_strat_IPCC_block_proc(settings: dict):
     """
-    Function that will calculate the SOC in a block processing way. This function should
+    Function that will calculate the SOC scenario by block processing the process per NUTS LEVEL. This function should
     be enabled if want to run the SOC with scenarios at NUTS level.
     :param settings: dictionary with the settings needed to run the SOC scenario
     :return: Output map with the requested SOC scenario
@@ -30,6 +31,8 @@ def SOC_strat_IPCC_block_proc(settings: dict):
 
     if settings.get('Country') is not None:
         shp_NUTS = shp_NUTS.loc[((shp_NUTS.CNTR_CODE == settings.get('Country')[0:2])& (shp_NUTS.LEVL_CODE == 3))]
+    else:
+        shp_NUTS = shp_NUTS.loc[shp_NUTS.LEVL_CODE == 3]
 
     ### LOOP NOW over the available NUTS3 regions in the area that is specified
 
@@ -40,30 +43,53 @@ def SOC_strat_IPCC_block_proc(settings: dict):
     for index, NUTS3_region in shp_NUTS.iterrows():
         logger.info(f'CALCULATING SOC FOR NUTS3 REGION: {NUTS3_region.NUTS_ID} \n'
                     f'{np.round((index/shp_NUTS.shape[0]) *100,2)}% COMPLETED')
-
         settings.update({'NUTS3_info': NUTS3_region})
 
-        ### create stock change factors specified for NUTS region
-        FMG_layer, meta_FMG_layer = create_factor_layer(settings, type_factor='FMG',
-                                        fixed_factor_creation=True)
-        FI_layer, meta_FI_layer = create_factor_layer(settings, type_factor='FI',
-                                       fixed_factor_creation=True)
 
-        ### add this loaded layer to the settings_file
-        settings.update({'FMG_layer': FMG_layer,
-                         'FMG_meta_layer': meta_FMG_layer,
-                         'FI_layer': FI_layer,
-                         'FI_meta_layer': meta_FI_layer})
-        ### NOW THE FINAL SOC BASED ON THE DEFINED SCENARIO CAN BE CALCULATED
+        ### define the output name of the SOC scenarios per NUTS LEVEL
+        outfolder = Path(settings.get('Basefolder_output')).joinpath('SOC_scenario')\
+            .joinpath(settings.get('NUTS3_info')['CNTR_CODE']).as_posix()
+        outname_SOC_scenario = f'SOC_{settings.get("Scenario_name")}' \
+                               f'_{settings.get("NUTS3_info")["NUTS_ID"]}.tif'
+        settings.update({'outdir_SOC_scenario': os.path.join(outfolder, outname_SOC_scenario)})
 
-        outdir_SOC_raster = create_SOC_scenario_layer(settings)
-        lst_raster_files.append(outdir_SOC_raster)
+        lst_raster_files.append(os.path.join(outfolder, outname_SOC_scenario))
+
+        if not os.path.exists(os.path.join(outfolder, outname_SOC_scenario)) or settings.get('overwrite'):
+
+
+            ### create stock change factors specified for NUTS region
+            FMG_layer, meta_FMG_layer = create_factor_layer(settings, type_factor='FMG',
+                                            fixed_factor_creation=True)
+            if FMG_layer is None and meta_FMG_layer is None:
+                continue
+            FI_layer, meta_FI_layer = create_factor_layer(settings, type_factor='FI',
+                                           fixed_factor_creation=True)
+            if FI_layer is None and meta_FI_layer is None:
+                continue
+
+            ### add this loaded layer to the settings_file
+            settings.update({'FMG_layer': FMG_layer,
+                             'FMG_meta_layer': meta_FMG_layer,
+                             'FI_layer': FI_layer,
+                             'FI_meta_layer': meta_FI_layer})
+            ### NOW THE FINAL SOC BASED ON THE DEFINED SCENARIO CAN BE CALCULATED
+
+            create_SOC_scenario_layer(settings)
+
+
+            #### ADD SOME METADATA FOR SOC SCENARIO
+            description_meta_NUTS = create_metadata_description_SOC(settings, extent = 'NUTS')
+            add_metadata_raster(description_meta_NUTS, os.path.join(outfolder, outname_SOC_scenario))
+
+
+
 
         ### check if some stats of the map need to be provided
         if settings.get('add_stats_NUTS_level') is not None:
 
-            df_stats_NUTS = calc_stats_SOC_NUTS(outdir_SOC_raster, NUTS3_region,
-                              settings)
+            df_stats_NUTS = calc_stats_SOC_NUTS(os.path.join(outfolder, outname_SOC_scenario)
+                                                , NUTS3_region,settings)
             lst_NUTS_stats.append(df_stats_NUTS)
 
 
@@ -72,32 +98,36 @@ def SOC_strat_IPCC_block_proc(settings: dict):
         ### define output folder for writing the result
         if settings.get('Country') is not None:
             outfolder = Path(settings.get('Basefolder_output')).joinpath('SOC_NUTS_stats').joinpath(settings.get('Country'))
-            outname = f'SOC_stats_NUTS_{settings.get("Country")}.shp'
+            outname = f'SOC_stats_NUTS_{settings.get("Country")}_{settings.get("Scenario_name")}.shp'
 
         else:
             outfolder = Path(settings.get('Basefolder_output')).joinpath('SOC_NUTS_stats')
-            outname = 'SOC_stats_NUTS_EEA39.shp'
+            outname = f'SOC_stats_NUTS_EEA39_{settings.get("Scenario_name")}.shp'
 
         outfolder.mkdir(parents=True, exist_ok=True)
 
-        df_stats_all_NUTS3 = pd.concat(lst_NUTS_stats)
+        if not os.path.exists(Path(outfolder).joinpath(outname)) or settings.get('overwrite'):
+            df_stats_all_NUTS3 = pd.concat(lst_NUTS_stats)
 
-        ## now that the NUTS3 is calculated also the weighted average at NUTS LEVEL0 can be derived
-        df_stats_NUTS_final = calc_weighted_average_NUTS(df_stats_all_NUTS3, settings.get('NUTS_extent_map'))
-
-
-
-        ## create now geodataframe out of it and write out the result
-        gpd_NUTS_stats = gpd.GeoDataFrame(df_stats_NUTS_final, geometry=df_stats_NUTS_final.geometry)
+            ## now that the NUTS3 is calculated also the weighted average at NUTS LEVEL0 can be derived
+            df_stats_NUTS_final = calc_weighted_average_NUTS(df_stats_all_NUTS3, settings.get('NUTS_extent_map'))
 
 
+            ## create now geodataframe out of it and write out the result
+            gpd_NUTS_stats = gpd.GeoDataFrame(df_stats_NUTS_final, geometry=df_stats_NUTS_final.geometry)
 
-        ## write out the result
-        gpd_NUTS_stats.crs = shp_NUTS.crs
-        gpd_NUTS_stats.to_file(Path(outfolder).joinpath(outname))
+            ## write out the result
+            gpd_NUTS_stats.crs = shp_NUTS.crs
+            gpd_NUTS_stats.to_file(Path(outfolder).joinpath(outname))
+
+
 
     ### Now mosaic all the pieces together
-    mosaic_raster(lst_raster_files, settings)
+    dir_mosaic_raster = mosaic_raster(lst_raster_files, settings, return_outdir=True)
+
+
+    description_meta = create_metadata_description_SOC(settings)
+    add_metadata_raster(description_meta, dir_mosaic_raster)
 
 
 
@@ -235,7 +265,7 @@ if __name__ == '__main__':
     ### Some default settings
 
     dir_signature = 'L:'
-    overwrite = False
+    overwrite = True
     Basefolder_strata = os.path.join(dir_signature, 'etc', 'lulucf', 'strata')
     SOC_LUT_folder = os.path.join(Basefolder_strata, 'SOC_LUT')
 
@@ -310,8 +340,7 @@ if __name__ == '__main__':
     ## One of the LU categories can be removed from the dictionary
     # if only want to do the estimation for one of the classes
 
-    #### use some default factors for EU LEVEL
-    run_default_scenario = False
+    #### use some default factors for EU LEVEL if no NUTS specific factors are provided
     dict_default_stock_change_factors = {
         'Cropland': {'FMG': 1, 'FI': 2},
         'Grassland': {'FMG': 1, 'FI': 1}}
@@ -322,12 +351,12 @@ if __name__ == '__main__':
     ### be loaded
     block_based_processing = True
 
-
-    scenario_name = 'Scenario1'
+    ### extension that is used to distinguish different scenario runs
+    scenario_name = 'Scenario_NUTS_specific'
 
 
     ### Country_running
-    Country = 'BE' #set to None if want to run entire EEA39 extent
+    Country = None #set to None if want to run entire EEA39 extent
     shp_NUTS_borders = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','NUTS_RG_20M_2021_3035.shp'))
     ### filter only on the NUTS levels of interest
     shp_NUTS_borders = shp_NUTS_borders.loc[shp_NUTS_borders.LEVL_CODE.isin([0,3])]
@@ -344,7 +373,6 @@ if __name__ == '__main__':
     add_stats_NUTS_level = True
 
     #### if you have an input layer for the FMG or FI please set the below parameter to False:
-
     Fixed_factor_FMG = True
     Fixed_factor_FI = True
 
@@ -361,7 +389,6 @@ if __name__ == '__main__':
                 'CLC_ACC_folder': CLC_ACC_folder,
                 'SOC_NUTS_scenarios_folder': SOC_NUTS_scenarios_folder,
                 'run_NUTS_specific_scenario': run_NUTS_specific_scenario,
-                'run_default_scenario': run_default_scenario,
                 'Stock_change_scenario': dict_default_stock_change_factors,
                 'SOC_LUT_folder': SOC_LUT_folder,
                 'Fixed_factor_FMG': Fixed_factor_FMG,
@@ -372,7 +399,8 @@ if __name__ == '__main__':
                 'block_based_processing': block_based_processing,
                 'path_IPCC_climate_resampled': path_IPCC_climate_resampled,
                 'path_IPCC_soil_resampled': path_IPCC_soil_resampled,
-                'add_stats_NUTS_level': add_stats_NUTS_level}
+                'add_stats_NUTS_level': add_stats_NUTS_level,
+                'commit_id': 'd0f6a6e0b4a48dc38c130f295a8bd8cd8b0f0f60'}
 
     main_stratification(settings)
 
