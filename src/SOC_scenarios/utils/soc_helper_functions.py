@@ -563,7 +563,7 @@ def create_SOC_scenario_layer(settings):
 
 
 def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_factor: str) -> dict:
-    folder = settings.get('SOC_NUTS_scenarios_folder')
+    folder = settings.get('SOC_NUTS_factors_folder')
     NUTS_info = settings.get('NUTS3_info')
 
     dict_scenario = {}
