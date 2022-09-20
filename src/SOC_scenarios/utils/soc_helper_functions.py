@@ -586,10 +586,10 @@ def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_fact
                 dict_scenario.update({crop:{type_factor: dict_default_scenario.get(crop).get(type_factor),
                                             'input_source': 'Baseline'}})
             else:
-                dict_scenario.update({crop:{type_factor: factor_NUTS0,
+                dict_scenario.update({crop:{type_factor: int(factor_NUTS0),
                                             'input_source': 'NUTS0'}})
         else:
-            dict_scenario.update({crop:{type_factor: factor_NUTS3,
+            dict_scenario.update({crop:{type_factor: int(factor_NUTS3),
                                         'input_source': 'NUTS3'}})
 
     return dict_scenario
@@ -793,6 +793,7 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
                         nodata=no_data, stats=stats_type)
         df_stats = pd.DataFrame.from_dict(stats)
         df_stats.columns = ['SOC_mean', 'nr_pixels']
+        df_stats = df_stats.round(2)
         # derive the croptype for which the stats are calculated
         croptype = df_FLU_mapping.loc[df_FLU_mapping['IPCC_landuse_id'] == FLU_class] \
             ['IPCC_landuse_name'].values[0]
