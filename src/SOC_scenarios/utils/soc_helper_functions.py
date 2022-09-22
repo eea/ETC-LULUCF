@@ -963,44 +963,44 @@ def create_metadata_description_SOC(settings: dict, extent: str = 'EEA39') -> di
         dict_FI_factors_info = get_factors_from_NUTS(settings, settings.get('Stock_change_scenario'), 'FI')
 
         if 'Cropland' in dict_FMG_factors_info.keys():
-            dict_general.update({'FMG CROPLAND': 'FACTOR {} & FROM {}'.format(dict_FMG_factors_info.get("Cropland").get("FMG"),
+            dict_general.update({'FMG CROPLAND': 'FACTOR CLASS {} & FROM {}'.format(dict_FMG_factors_info.get("Cropland").get("FMG"),
                                  dict_FMG_factors_info.get("Cropland").get("input_source"))})
         if 'Cropland' in dict_FI_factors_info.keys():
-            dict_general.update({'FI CROPLAND': 'FACTOR {} & FROM {}'.format(dict_FI_factors_info.get("Cropland").get("FI"),
+            dict_general.update({'FI CROPLAND': 'FACTOR CLASS {} & FROM {}'.format(dict_FI_factors_info.get("Cropland").get("FI"),
                                                                      dict_FI_factors_info.get("Cropland").get("input_source"))})
 
         if 'Grassland' in dict_FMG_factors_info.keys():
-            dict_general.update({'FMG GRASSLAND': 'FACTOR {} & FROM {}'.format(dict_FMG_factors_info.get("Grassland").get("FMG"),
+            dict_general.update({'FMG GRASSLAND': 'FACTOR CLASS {} & FROM {}'.format(dict_FMG_factors_info.get("Grassland").get("FMG"),
                                                                               dict_FMG_factors_info.get("Grassland").get("input_source"))})
 
         if 'Grassland' in dict_FI_factors_info.keys():
-            dict_general.update({'FI GRASSLAND': 'FACTOR {} & FROM {}'.format(dict_FI_factors_info.get("Grassland").get("FI"),
+            dict_general.update({'FI GRASSLAND': 'FACTOR CLASS {} & FROM {}'.format(dict_FI_factors_info.get("Grassland").get("FI"),
                                                                          dict_FI_factors_info.get("Grassland").get("input_source"))})
 
 
     else:
 
         if 'Cropland' in settings.get("Stock_change_scenario").keys():
-            dict_general.update({'FMG CROPLAND': 'FACTOR {} FROM DEFAULT SCENARIO EEA39'
+            dict_general.update({'FMG CROPLAND': 'FACTOR CLASS {} FROM DEFAULT SCENARIO EEA39'
                                 .format(settings.get("Stock_change_scenario").get("Cropland").get("FMG"))})
 
-            dict_general.update({'FI CROPLAND': 'FACTOR {} FROM DEFAULT SCENARIO EEA39'
+            dict_general.update({'FI CROPLAND': 'FACTOR CLASS {} FROM DEFAULT SCENARIO EEA39'
                                 .format(settings.get("Stock_change_scenario").get("Cropland").get("FI"))})
         if 'Grassland' in settings.get("Stock_change_scenario").keys():
-            dict_general.update({'FMG GRASSLAND': 'FACTOR {} FROM DEFAULT SCENARIO EEA39'
+            dict_general.update({'FMG GRASSLAND': 'FACTOR CLASS {} FROM DEFAULT SCENARIO EEA39'
                                 .format(settings.get("Stock_change_scenario").get("Grassland").get("FMG"))})
 
-            dict_general.update({'FI GRASSLAND': 'FACTOR {} FROM DEFAULT SCENARIO EEA39'
+            dict_general.update({'FI GRASSLAND': 'FACTOR CLASS {} FROM DEFAULT SCENARIO EEA39'
                                 .format(settings.get("Stock_change_scenario").get("Grassland").get("FI"))})
 
 
     if settings.get('Fixed_factor_FLU'):
         if 'Cropland' in settings.get('Stock_change_scenario').keys():
-            dict_general.update({'FLU CROPLAND': 'FACTOR {} FROM DEFAULT SCENARIO EEA39'
+            dict_general.update({'FLU CROPLAND': 'FACTOR CLASS {} FROM DEFAULT SCENARIO EEA39'
                                 .format(settings.get('Stock_change_scenario').get('Cropland').get('FLU'))})
 
         if 'Grassland' in settings.get('Stock_change_scenario').keys():
-            dict_general.update({'FLU GRASSLAND': 'FACTOR {} FROM DEFAULT SCENARIO EEA39'
+            dict_general.update({'FLU GRASSLAND': 'FACTOR CLASS {} FROM DEFAULT SCENARIO EEA39'
                                 .format(settings.get('Stock_change_scenario').get('Grassland').get('FLU'))})
     else:
         if not settings.get('Fixed_factor_FLU'):
