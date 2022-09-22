@@ -956,6 +956,8 @@ def create_metadata_description_SOC(settings: dict, extent: str = 'EEA39') -> di
         dict_general.update({'FI': 'NUTS_specific info from NUTS3/0 or baseline if no NUTS specific info available',
                              'FMG': 'NUTS_specific info from NUTS3/0 or baseline if no NUTS specific info available'})
 
+
+
     elif settings.get('run_NUTS_specific_scenario') and extent == 'NUTS':
         dict_FMG_factors_info = get_factors_from_NUTS(settings, settings.get('Stock_change_scenario'), 'FMG')
         dict_FI_factors_info = get_factors_from_NUTS(settings, settings.get('Stock_change_scenario'), 'FI')
@@ -992,6 +994,17 @@ def create_metadata_description_SOC(settings: dict, extent: str = 'EEA39') -> di
                                 .format(settings.get("Stock_change_scenario").get("Grassland").get("FI"))})
 
 
+    if settings.get('Fixed_factor_FLU'):
+        if 'Cropland' in settings.get('Stock_change_scenario').keys():
+            dict_general.update({'FLU CROPLAND': 'FACTOR {} FROM DEFAULT SCENARIO EEA39'
+                                .format(settings.get('Stock_change_scenario').get('Cropland').get('FLU'))})
+
+        if 'Grassland' in settings.get('Stock_change_scenario').keys():
+            dict_general.update({'FLU GRASSLAND': 'FACTOR {} FROM DEFAULT SCENARIO EEA39'
+                                .format(settings.get('Stock_change_scenario').get('Grassland').get('FLU'))})
+    else:
+        if not settings.get('Fixed_factor_FLU'):
+            dict_general.update({'FLU': 'Calculated from CLC and IPCC LUT'})
 
 
     dict_general.update({'MAP_EXTENT':extent})
