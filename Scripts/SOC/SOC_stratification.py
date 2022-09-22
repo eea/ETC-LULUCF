@@ -62,10 +62,15 @@ def SOC_strat_IPCC_block_proc(settings: dict):
 
         if not os.path.exists(os.path.join(outfolder, outname_SOC_scenario)) or settings.get('overwrite'):
 
+            if settings.get('Fixed_factor_FLU'):
+                FLU_layer, meta_FLU_layer = create_FLU_layer(settings, fixed_factor_creation=True)
+                settings.update({'FLU_layer': FLU_layer,
+                                 'FLU_meta_layer': meta_FLU_layer})
+                if FLU_layer is None and meta_FLU_layer is None:
+                    continue
 
             ### create stock change factors specified for NUTS region
-            FMG_layer, meta_FMG_layer = create_factor_layer(settings, type_factor='FMG',
-                                            fixed_factor_creation=True)
+            FMG_layer, meta_FMG_layer = create_factor_layer(settings, type_factor='FMG')
             if FMG_layer is None and meta_FMG_layer is None:
                 continue
             FI_layer, meta_FI_layer = create_factor_layer(settings, type_factor='FI',
@@ -84,8 +89,8 @@ def SOC_strat_IPCC_block_proc(settings: dict):
 
 
             #### ADD SOME METADATA FOR SOC SCENARIO
-            description_meta_NUTS = create_metadata_description_SOC(settings, extent = 'NUTS')
-            add_metadata_raster(description_meta_NUTS, os.path.join(outfolder, outname_SOC_scenario))
+            dict_general, dict_band = create_metadata_description_SOC(settings, extent='NUTS')
+            add_metadata_raster(dict_general, dict_band, os.path.join(outfolder, outname_SOC_scenario))
 
 
 
@@ -131,8 +136,8 @@ def SOC_strat_IPCC_block_proc(settings: dict):
     dir_mosaic_raster = mosaic_raster(lst_raster_files, settings, return_outdir=True)
 
 
-    description_meta = create_metadata_description_SOC(settings)
-    add_metadata_raster(description_meta, dir_mosaic_raster)
+    dict_general, dict_band = create_metadata_description_SOC(settings)
+    add_metadata_raster(dict_general, dict_band, dir_mosaic_raster)
 
 
 
@@ -225,7 +230,7 @@ def SOC_strat_IPCC_full_extent(settings):
     # MANAGEMENT AND LAND USE (FLU, FI, FMG)
 
     ### FLU generation
-    create_FLU_layer(SOC_LUT_folder,settings)
+    create_FLU_layer(settings)
 
     ###### FMG LAYER GENERATION
     create_factor_layer(settings, type_factor='FMG'
@@ -304,8 +309,16 @@ if __name__ == '__main__':
         'Other_land': {'CLC_classes': [331,332,333,335],
                        'ID_class': 6}}
 
-    ###### SPECIFY SOME SCENARIO (FMG & FI) WITH DIFFERENT STOCK CHANGE
+    ###### SPECIFY SOME SCENARIO (FLU & FMG & FI) WITH DIFFERENT STOCK CHANGE
     # FACTORS FROM IPCC TO MAP THE SOC RESULT
+
+    ##### FLU (Land Use) Cropland options:
+    """
+    1: Longterm cultivated
+    2: Paddy rice
+    3: Perrennial/Tree crop
+    4: Set aside (<20 yrs)
+    """
 
     ##### FMG (Management) Cropland options:
     """
@@ -342,8 +355,9 @@ if __name__ == '__main__':
 
     #### use some default factors for EU LEVEL if no NUTS specific factors are provided
     dict_default_stock_change_factors = {
-        'Cropland': {'FMG': 1, 'FI': 2},
-        'Grassland': {'FMG': 1, 'FI': 1}}
+        'Cropland': {'FLU': 1, 'FMG': 1, 'FI': 1}
+        }
+    #'Grassland': {'FMG': 1, 'FI': 1}
 
 
     ### Define if the results should be created by block-based
@@ -352,7 +366,7 @@ if __name__ == '__main__':
     block_based_processing = True
 
     ### extension that is used to distinguish different scenario runs
-    scenario_name = 'Scenario_NUTS_specific'
+    scenario_name = 'Scenario_1_baseline'
 
 
     ### Country_running
@@ -364,7 +378,7 @@ if __name__ == '__main__':
     ### if want to run with some NUTS specific factors
     ### set the below parameter to true
     ### if a country is defined only the NUTS regions in that country will be considered
-    run_NUTS_specific_scenario = True
+    run_NUTS_specific_scenario = False
     SOC_NUTS_factors_folder = os.path.join(Basefolder_strata,'NUTS_LUT_SOC_scenario')
 
 
@@ -374,6 +388,7 @@ if __name__ == '__main__':
     #### if you have an input layer for the FMG or FI please set the below parameter to False:
     Fixed_factor_FMG = True
     Fixed_factor_FI = True
+    Fixed_factor_FLU = True ## in casea baseline is used instead of the current FLU based on CLC
 
     scaling = 100 # the scaling that is used on the factors to avoid working in float
 
@@ -392,6 +407,7 @@ if __name__ == '__main__':
                 'SOC_LUT_folder': SOC_LUT_folder,
                 'Fixed_factor_FMG': Fixed_factor_FMG,
                 'Fixed_factor_FI': Fixed_factor_FI,
+                'Fixed_factor_FLU': Fixed_factor_FLU,
                 'Scaling': scaling,
                 'Scenario_name': scenario_name,
                 'Country': Country,
