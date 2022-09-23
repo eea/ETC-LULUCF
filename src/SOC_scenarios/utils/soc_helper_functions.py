@@ -153,6 +153,11 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
     else:
         if not settings.get('NUTS3_info').geometry is None:
             bounds = settings.get('NUTS3_info').geometry.bounds
+        else:
+            ## ignore empty regions
+            logger.info(f'NO GEOMETRY PROVIDED FOR AREA {settings.get("NUTS3_info").NUTS_ID}')
+            return None, None
+
         outname_CLC_FLU_mapped = Path(CLC_ACC_file).stem + '_IPCC_FLU_mapped_{}.tif'.format(settings.get('Scenario_name'))
 
     if settings.get('Country') is None:
@@ -172,8 +177,8 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
 
     outdir_CLC_IPCC_LU_category.mkdir(parents=True, exist_ok=True)
 
-    if ((not os.path.exists(outdir_CLC_FLU_mapped.joinpath(outname_CLC_FLU_mapped)) and not overwrite)\
-            or (not os.path.exists(outdir_CLC_IPCC_LU_category.joinpath(outname_CLC_IPCC_LU_category)) and not overwrite)):
+    if ((not os.path.exists(outdir_CLC_FLU_mapped.joinpath(outname_CLC_FLU_mapped)))\
+            or (not os.path.exists(outdir_CLC_IPCC_LU_category.joinpath(outname_CLC_IPCC_LU_category)) or overwrite)):
 
 
         if not settings.get('block_based_processing'):
@@ -188,7 +193,7 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
             CLC_transform = CLC_meta.get('transform')
 
 
-        if not os.path.exists(outdir_CLC_IPCC_LU_category.joinpath(outname_CLC_IPCC_LU_category)) and not overwrite:
+        if not os.path.exists(outdir_CLC_IPCC_LU_category.joinpath(outname_CLC_IPCC_LU_category)):
             ## create IPCC LU category mapping layer:
             CLC_remap_IPCC_LUCAT = np.full(CLC_raster.shape,255).astype(np.uint8)
             CLC_meta.update({'nodata': 255, 'dtype': 'uint8'})
@@ -199,7 +204,7 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
                 CLC_remap_IPCC_LUCAT[CLC_raster == CLC_ID] = LUCAT_ID
             write_raster(np.expand_dims(CLC_remap_IPCC_LUCAT,0),CLC_meta,CLC_transform,outdir_CLC_IPCC_LU_category, outname_CLC_IPCC_LU_category)
 
-        if not os.path.exists(outdir_CLC_FLU_mapped.joinpath(outname_CLC_FLU_mapped)) and not overwrite:
+        if not os.path.exists(outdir_CLC_FLU_mapped.joinpath(outname_CLC_FLU_mapped)) or overwrite:
             ## open the IPCC climate raster which is also needed to calculate the factors
             if not settings.get('block_based_processing'):
                 climate_raster = rasterio.open(path_climate_raster).read(1)
@@ -638,7 +643,7 @@ def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_fact
 
             if pd.isnull(factor_NUTS0):
                 dict_scenario.update({crop:{type_factor: dict_default_scenario.get(crop).get(type_factor),
-                                            'input_source': 'Baseline'}})
+                                            'input_source': 'EEA39'}})
             else:
                 dict_scenario.update({crop:{type_factor: int(factor_NUTS0),
                                             'input_source': 'NUTS0'}})
@@ -857,16 +862,31 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
         df_stats['NUTS_LEVEL'] = spatial_layer.LEVL_CODE
 
         ### Assign also used FMG & FI factors to shapefile
-        dict_FMG_factors_info = get_factors_from_NUTS(settings, settings.get('Stock_change_scenario'), 'FMG')
+        if settings.get('run_NUTS_specific_scenario'):
+            dict_FMG_factors_info = get_factors_from_NUTS(settings, settings.get('Stock_change_scenario'), 'FMG')
+        else:
+            dict_FMG_factors_info = settings.get('Stock_change_scenario')
         if not croptype in dict_FMG_factors_info.keys():
             ### Factors are not defined for this crop type
             continue
         df_stats['FMG_factor'] = dict_FMG_factors_info.get(croptype).get('FMG')
         df_stats['FMG_src'] = dict_FMG_factors_info.get(croptype).get('input_source')
 
-        dict_FI_factors_info = get_factors_from_NUTS(settings, settings.get('Stock_change_scenario'), 'FI')
+        if settings.get('run_NUTS_specific_scenario'):
+            dict_FI_factors_info = get_factors_from_NUTS(settings, settings.get('Stock_change_scenario'), 'FI')
+        else:
+            dict_FI_factors_info = settings.get('Stock_change_scenario')
         df_stats['FI_factor'] = dict_FI_factors_info.get(croptype).get('FI')
         df_stats['FI_src'] = dict_FI_factors_info.get(croptype).get('input_source')
+
+        if settings.get('Fixed_factor_FLU'):
+            if croptype in settings.get('Stock_change_scenario').keys():
+                df_stats['FLU_factor'] = settings.get('Stock_change_scenario').get('Cropland').get('FLU')
+                df_stats['FLU_src'] = 'EEA39'
+
+        else:
+            df_stats['FLU_factor'] = 'current'
+            df_stats['FLU_src'] = 'CLC'
 
         df_stats['geometry'] = [spatial_layer.geometry]
         lst_df_stats_NUTS.append(df_stats)
@@ -945,7 +965,7 @@ def create_metadata_description_SOC(settings: dict, extent: str = 'EEA39') -> di
     dict_general ={'copyright':'DO NOT DISTRIBUTE',
                    'commit_id': settings.get('commit_id'),
                    'doi':'Prototype dataset, no registered DOI',
-                   'institution':'VITO NV',
+                   'institution':'EEA',
                    'name':settings.get('Scenario_name'),
                    'processing_date':datetime.datetime.now().date(),
                    'source':'Derived from IPCC soil and climate classifications and CLC. LUT are used to calculate the SOC',
@@ -953,8 +973,8 @@ def create_metadata_description_SOC(settings: dict, extent: str = 'EEA39') -> di
 
 
     if settings.get('run_NUTS_specific_scenario') and extent == 'EEA39':
-        dict_general.update({'FI': 'NUTS_specific info from NUTS3/0 or baseline if no NUTS specific info available',
-                             'FMG': 'NUTS_specific info from NUTS3/0 or baseline if no NUTS specific info available'})
+        dict_general.update({'FI': 'NUTS_specific info from NUTS3/0 or EEA39 scale if no NUTS specific info available',
+                             'FMG': 'NUTS_specific info from NUTS3/0 or EEA39 scale if no NUTS specific info available'})
 
 
 

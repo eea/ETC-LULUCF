@@ -46,6 +46,7 @@ def SOC_strat_IPCC_block_proc(settings: dict):
     lst_raster_files = []
     lst_NUTS_stats = []
     for index, NUTS3_region in shp_NUTS.iterrows():
+
         logger.info(f'CALCULATING SOC FOR NUTS3 REGION: {NUTS3_region.NUTS_ID} \n'
                     f'{np.round((index/shp_NUTS.shape[0]) *100,2)}% COMPLETED')
         settings.update({'NUTS3_info': NUTS3_region})
@@ -270,7 +271,7 @@ if __name__ == '__main__':
     ### Some default settings
 
     dir_signature = 'L:'
-    overwrite = False
+    overwrite = True
     Basefolder_strata = os.path.join(dir_signature, 'etc', 'lulucf', 'strata')
     SOC_LUT_folder = os.path.join(Basefolder_strata, 'SOC_LUT')
 
@@ -355,7 +356,8 @@ if __name__ == '__main__':
 
     #### use some default factors for EU LEVEL if no NUTS specific factors are provided
     dict_default_stock_change_factors = {
-        'Cropland': {'FLU': 1, 'FMG': 1, 'FI': 1}
+        'Cropland': {'FLU': 1, 'FMG': 1, 'FI': 1,
+                     'input_source': 'EEA39'}
         }
     #'Grassland': {'FMG': 1, 'FI': 1}
 
@@ -388,7 +390,11 @@ if __name__ == '__main__':
     #### if you have an input layer for the FMG or FI please set the below parameter to False:
     Fixed_factor_FMG = True
     Fixed_factor_FI = True
-    Fixed_factor_FLU = True ## in casea baseline is used instead of the current FLU based on CLC
+
+    ## In case the baseline is used instead of the current FLU (based on CLC input layer).
+    ## For baseline --> Set to True
+    ## For current --> Set to False
+    Fixed_factor_FLU = True
 
     scaling = 100 # the scaling that is used on the factors to avoid working in float
 
@@ -415,7 +421,7 @@ if __name__ == '__main__':
                 'path_IPCC_climate_resampled': path_IPCC_climate_resampled,
                 'path_IPCC_soil_resampled': path_IPCC_soil_resampled,
                 'add_stats_NUTS_level': add_stats_NUTS_level,
-                'commit_id': '2f032dbf1992682b8ea4cc45b78ebba41de8fb72'}
+                'commit_id': '143283d7d62710a1b4ae75511b7f2e75e81bf6ba'}
 
     main_stratification(settings)
 
