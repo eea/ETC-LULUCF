@@ -811,6 +811,26 @@ def rescale_raster(raster_file,outdir, rescale_factor):
     return os.path.join(outdir, outname)
 
 
+def add_atrributes_SOC_stats(spatial_layer: gpd, level_NUTS_focus = None, spatial_resolution: int = 100) -> gpd:
+    """
+    Function that will insert some additional columns that could be used for the interpretation or analysis
+    of the SOC stats.
+    :param spatial_layer: Geopandas layer in which the SOC stats are written
+    :param level_NUTS_focus: if needed specify the NUTS level of focus for the stats
+    :param spatial_resolution: the spatial resolution on which the aggregation was done
+    :return: update of the geodataframe with some additional attributes
+    """
+    if level_NUTS_focus != None:
+        spatial_layer = spatial_layer.loc[spatial_layer.NUTS_LEVEL == level_NUTS_focus]
+
+    spatial_layer['area_NUTS_[ha]'] = (spatial_layer.geometry.area)/(spatial_resolution**2)
+    spatial_layer = spatial_layer.rename(columns={'nr_pixels': 'area_IPCC_cat_[ha]'})
+    spatial_layer['%_cover_IPCC_cat'] = (spatial_layer['area_IPCC_cat_[ha]'] / spatial_layer['area_NUTS_[ha]']) * 100
+
+    return spatial_layer
+
+
+
 
 
 
@@ -854,10 +874,10 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
         df_stats = pd.DataFrame.from_dict(stats)
         df_stats.columns = ['SOC_mean', 'nr_pixels']
         df_stats = df_stats.round(2)
-        # derive the croptype for which the stats are calculated
-        croptype = df_FLU_mapping.loc[df_FLU_mapping['IPCC_landuse_id'] == FLU_class] \
+        # derive the IPCC_cat for which the stats are calculated
+        IPCC_cat = df_FLU_mapping.loc[df_FLU_mapping['IPCC_landuse_id'] == FLU_class] \
             ['IPCC_landuse_name'].values[0]
-        df_stats['croptype'] = croptype
+        df_stats['IPCC_cat'] = IPCC_cat
         df_stats['NUTS_ID'] = spatial_layer.NUTS_ID
         df_stats['NUTS_LEVEL'] = spatial_layer.LEVL_CODE
 
@@ -866,21 +886,21 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
             dict_FMG_factors_info = get_factors_from_NUTS(settings, settings.get('Stock_change_scenario'), 'FMG')
         else:
             dict_FMG_factors_info = settings.get('Stock_change_scenario')
-        if not croptype in dict_FMG_factors_info.keys():
+        if not IPCC_cat in dict_FMG_factors_info.keys():
             ### Factors are not defined for this crop type
             continue
-        df_stats['FMG_factor'] = dict_FMG_factors_info.get(croptype).get('FMG')
-        df_stats['FMG_src'] = dict_FMG_factors_info.get(croptype).get('input_source')
+        df_stats['FMG_factor'] = dict_FMG_factors_info.get(IPCC_cat).get('FMG')
+        df_stats['FMG_src'] = dict_FMG_factors_info.get(IPCC_cat).get('input_source')
 
         if settings.get('run_NUTS_specific_scenario'):
             dict_FI_factors_info = get_factors_from_NUTS(settings, settings.get('Stock_change_scenario'), 'FI')
         else:
             dict_FI_factors_info = settings.get('Stock_change_scenario')
-        df_stats['FI_factor'] = dict_FI_factors_info.get(croptype).get('FI')
-        df_stats['FI_src'] = dict_FI_factors_info.get(croptype).get('input_source')
+        df_stats['FI_factor'] = dict_FI_factors_info.get(IPCC_cat).get('FI')
+        df_stats['FI_src'] = dict_FI_factors_info.get(IPCC_cat).get('input_source')
 
         if settings.get('Fixed_factor_FLU'):
-            if croptype in settings.get('Stock_change_scenario').keys():
+            if IPCC_cat in settings.get('Stock_change_scenario').keys():
                 df_stats['FLU_factor'] = settings.get('Stock_change_scenario').get('Cropland').get('FLU')
                 df_stats['FLU_src'] = 'EEA39'
 
@@ -921,11 +941,11 @@ def calc_weighted_average_NUTS(df_stats_NUTS_small: pd.DataFrame, NUTS_layer: gp
     # save the stats of the big NUTS area in a list and merge it together with the stats of the smaller NUTS areas
     lst_stats_all_NUTS = []
     for NUTS_big_region in df_NUTS3_matched[f'NUTS_region_LEVEL{str(level_focus)}'].unique():
-        for croptype in df_stats_NUTS_small['croptype'].unique():
+        for IPCC_cat in df_stats_NUTS_small['IPCC_cat'].unique():
             #derive weight per subarea for the calculation
             df_NUTS3_matched_filter = df_NUTS3_matched\
                                         .loc[((df_NUTS3_matched[f'NUTS_region_LEVEL{str(level_focus)}'] == NUTS_big_region)
-                                              & (df_NUTS3_matched['croptype']== croptype))]
+                                              & (df_NUTS3_matched['IPCC_cat']== IPCC_cat))]
             if df_NUTS3_matched_filter.empty:
                 continue
 
@@ -936,7 +956,7 @@ def calc_weighted_average_NUTS(df_stats_NUTS_small: pd.DataFrame, NUTS_layer: gp
                                                * df_NUTS3_matched_filter['SOC_mean']).mean(),2)
             df_stats_NUTS_region = pd.DataFrame([mean_value_NUTS_region], columns= ['SOC_mean'])
             df_stats_NUTS_region['nr_pixels'] = [tot_pixel]
-            df_stats_NUTS_region['croptype'] = [croptype]
+            df_stats_NUTS_region['IPCC_cat'] = [IPCC_cat]
             df_stats_NUTS_region['NUTS_LEVEL'] = [str(level_focus)]
             df_stats_NUTS_region['NUTS_ID'] = [NUTS_big_region]
             df_stats_NUTS_region['geometry'] = [NUTS_layer.loc[NUTS_layer.NUTS_ID == NUTS_big_region].geometry.values[0]]
