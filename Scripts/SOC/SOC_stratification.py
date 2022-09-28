@@ -13,7 +13,8 @@ from SOC_scenarios.utils.soc_helper_functions import mask_raster_extent\
     , create_SOC_REF_raster, create_FLU_layer, create_factor_layer\
     ,create_SOC_scenario_layer, resample_raster_to_ref, mosaic_raster\
     , calc_stats_SOC_NUTS, calc_weighted_average_NUTS, \
-    create_metadata_description_SOC, add_metadata_raster
+    create_metadata_description_SOC, add_metadata_raster,\
+    add_atrributes_SOC_stats
 
 
 def SOC_strat_IPCC_block_proc(settings: dict):
@@ -113,7 +114,7 @@ def SOC_strat_IPCC_block_proc(settings: dict):
 
         else:
             outfolder = Path(settings.get('Basefolder_output')).joinpath('SOC_NUTS_stats')
-            outname = f'SOC_stats_NUTS_EEA39_{settings.get("Scenario_name")}.shp'
+            outname = f'SOC_stats_NUTS_EEA39_{settings.get("Scenario_name")}.geojson'
 
         outfolder.mkdir(parents=True, exist_ok=True)
 
@@ -127,9 +128,16 @@ def SOC_strat_IPCC_block_proc(settings: dict):
             ## create now geodataframe out of it and write out the result
             gpd_NUTS_stats = gpd.GeoDataFrame(df_stats_NUTS_final, geometry=df_stats_NUTS_final.geometry)
 
+            ## add additional attribute tables that enable to interpret the results
+            gpd_NUTS_stats = add_atrributes_SOC_stats(gpd_NUTS_stats, level_NUTS_focus=3)
+
+
             ## write out the result
             gpd_NUTS_stats.crs = shp_NUTS.crs
-            gpd_NUTS_stats.to_file(Path(outfolder).joinpath(outname))
+            if outname.endswith('geojson'):
+                gpd_NUTS_stats.to_file(Path(outfolder).joinpath(outname), driver='GeoJSON')
+            else:
+                gpd_NUTS_stats.to_file(Path(outfolder).joinpath(outname))
 
 
 
@@ -271,7 +279,7 @@ if __name__ == '__main__':
     ### Some default settings
 
     dir_signature = 'L:'
-    overwrite = True
+    overwrite = False
     Basefolder_strata = os.path.join(dir_signature, 'etc', 'lulucf', 'strata')
     SOC_LUT_folder = os.path.join(Basefolder_strata, 'SOC_LUT')
 
@@ -421,7 +429,7 @@ if __name__ == '__main__':
                 'path_IPCC_climate_resampled': path_IPCC_climate_resampled,
                 'path_IPCC_soil_resampled': path_IPCC_soil_resampled,
                 'add_stats_NUTS_level': add_stats_NUTS_level,
-                'commit_id': '143283d7d62710a1b4ae75511b7f2e75e81bf6ba'}
+                'commit_id': '34e5c308b930d8906e89bca7bd75429f70fbda47'}
 
     main_stratification(settings)
 
