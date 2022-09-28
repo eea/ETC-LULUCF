@@ -48,12 +48,12 @@ for scenario in Scenario_files:
     ### add now the desired columns to the baseline
     gpd_SOC_baseline_scenario_stats[f'SOC_mean_{Baseline_scenario_name}_[tonC/ha]'] = gpd_baseline['SOC_mean']
     gpd_SOC_baseline_scenario_stats[f'SOC_mean_{scenario_name}_[tonC/ha]'] = gpd_scenario['SOC_mean']
-    gpd_SOC_baseline_scenario_stats[f'SOC_yrly_diff_{scenario_name}_[tonC/ha]'] = (gpd_SOC_baseline_scenario_stats[f'SOC_mean_{scenario_name}_[tonC/ha'] -
+    gpd_SOC_baseline_scenario_stats[f'SOC_yrly_diff_{scenario_name}_[tonC/ha]'] = (gpd_SOC_baseline_scenario_stats[f'SOC_mean_{scenario_name}_[tonC/ha]'] -
                                                                          gpd_SOC_baseline_scenario_stats[f'SOC_mean_{Baseline_scenario_name}_[tonC/ha]'])\
                                                                         /years_SOC_stable
 
     ### yearly percentual difference from reference SOC stock (absolute difference divided by SOC baseline and multiplied by 100
-    gpd_SOC_baseline_scenario_stats[f'SOC_yrly_%_diff_{scenario_name}'] = (((gpd_SOC_baseline_scenario_stats[f'SOC_mean_{scenario_name}_[tonC/ha'] -
+    gpd_SOC_baseline_scenario_stats[f'SOC_yrly_%_diff_{scenario_name}'] = (((gpd_SOC_baseline_scenario_stats[f'SOC_mean_{scenario_name}_[tonC/ha]'] -
                                                                          gpd_SOC_baseline_scenario_stats[f'SOC_mean_{Baseline_scenario_name}_[tonC/ha]']) \
                                                                         /years_SOC_stable)/ \
                                                                           gpd_SOC_baseline_scenario_stats[f'SOC_mean_{Baseline_scenario_name}_[tonC/ha]']) *100
