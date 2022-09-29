@@ -170,7 +170,7 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
     ### Also create a layer that defines the IPCC land use categories
     ### from CLC
     outname_CLC_IPCC_LU_category = Path(CLC_ACC_file).stem + '_IPCC_LU_Categories_Grassland_Cropland.tif'
-    if settings.get('Country') is None:
+    if settings.get('Country') is None or settings.get('block_based_processing'):
         outdir_CLC_IPCC_LU_category = Path(Basefolder_output_data).joinpath('CLC_ACC_IPCC')
     else:
         outdir_CLC_IPCC_LU_category = Path(Basefolder_output_data).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
