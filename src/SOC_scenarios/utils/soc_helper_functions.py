@@ -127,7 +127,7 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
     path_climate_raster = settings.get('path_IPCC_climate_resampled')
     Basefolder_output_data = settings.get('Basefolder_output')
 
-    if settings.get('Country') is None:
+    if settings.get('Country') is None or settings.get('block_based_processing'):
         CLC_ACC_file = [item for item in glob.glob(os.path.join(CLC_ACC_folder_original, '*.tif')) if 'CLC{}'.format(str(year_focus)) in Path(item).stem][0]
     else:
         CLC_ACC_file = [item for item in glob.glob(os.path.join(CLC_ACC_folder_Country, settings.get('Country'), '*.tif'))
