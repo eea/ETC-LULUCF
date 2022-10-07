@@ -12,6 +12,7 @@ import os
 df_EEA_NUTS = pd.read_csv(r"L:\etc\lulucf\AOI\EEA\admlayer_eea38plus_v_june_126_65.csv")
 gpd_NUTS_STATS = gpd.read_file(r"L:\etc\lulucf\strata\SOC_NUTS_stats\SOC_baseline_VS_scenarios_stats_NUTS.geojson")
 outfolder = r'L:\etc\lulucf\strata\SOC_NUTS_stats\EEA_format'
+os.makedirs(outfolder, exist_ok=True)
 outname = f'IPCC_SOC_baseline_VS_scenarios_V_{str(datetime.datetime.now().date())}.csv'
 ### drop redundant columns:
 columns = list(gpd_NUTS_STATS.columns.values)
