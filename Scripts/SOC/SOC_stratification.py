@@ -431,7 +431,7 @@ if __name__ == '__main__':
                 'path_IPCC_climate_resampled': path_IPCC_climate_resampled,
                 'path_IPCC_soil_resampled': path_IPCC_soil_resampled,
                 'add_stats_NUTS_level': add_stats_NUTS_level,
-                'commit_id': '3eb0ca6b2b945125f5eab2fc211b6c3d3f390299'}
+                'commit_id': 'a06843d97f3d2de96e461570f8e1c537dca9579a'}
 
     main_stratification(settings)
 
