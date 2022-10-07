@@ -13,6 +13,7 @@ Basefolder_SOC_stats = r'L:\etc\lulucf\strata\SOC_NUTS_stats'
 suffix_file = '.geojson' ## if only want to select certain versions of the stats
 scenario_baseline = '1'
 years_SOC_stable = 20  # the amount of years before SOC reach equilibrium
+IPCC_cat = 'grassland'
 
 if AOI == 'EEA39':
     Basefolder_AOI = os.path.join(Basefolder_SOC_stats)
@@ -21,6 +22,9 @@ else:
 
 SOC_stats_files = glob.glob(os.path.join(Basefolder_AOI, f'*{suffix_file}'))
 Baseline_file = [item for item in SOC_stats_files if ('baseline' in Path(item).stem) & ('Scenario_1' in Path(item).stem)]
+if IPCC_cat != None:
+    Baseline_file = [item for item in Baseline_file if IPCC_cat in Path(item).stem]
+    SOC_stats_files = [item for item in SOC_stats_files if IPCC_cat in Path(item).stem]
 if len(Baseline_file) >1:
     print("Multiple baseline files available --> don't know which to choose")
     assert Exception
@@ -37,9 +41,15 @@ Baseline_scenario_name = 'Scenario_1_baseline'
 gpd_SOC_baseline_scenario_stats = gpd_baseline.copy(deep=True)
 NUTS_regions = gpd_baseline.NUTS_ID.to_list()
 for scenario in Scenario_files:
-    scenario_name = '_'.join(Path(scenario).stem.split('_')[-3:])
-    gpd_scenario = gpd.read_file(scenario)
+    if IPCC_cat != None:
+        if IPCC_cat in scenario:
+            scenario_stem = Path(scenario).stem.replace(f'_{IPCC_cat}','')
+        else:
+            scenario_stem = Path(scenario).stem
 
+    scenario_name = '_'.join(scenario_stem.split('_')[-3:])
+
+    gpd_scenario = gpd.read_file(scenario)
     ## ensure the baseline and future scenario are sorted in the same way
     gpd_scenario = gpd_scenario.set_index('NUTS_ID')
     gpd_scenario = gpd_scenario.reindex(NUTS_regions)
@@ -60,6 +70,8 @@ for scenario in Scenario_files:
 
 
 outname = 'SOC_baseline_VS_scenarios_stats_NUTS.geojson'
+if IPCC_cat != None:
+    outname = Path(outname).stem + f'_{IPCC_cat}.geojson'
 gpd_SOC_baseline_scenario_stats = gpd_SOC_baseline_scenario_stats.drop(columns=['SOC_mean'])
 gpd_SOC_baseline_scenario_stats.to_file(os.path.join(Basefolder_AOI, outname), driver='GeoJSON')
 
