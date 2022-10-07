@@ -219,17 +219,19 @@ def SOC_strat_IPCC_full_extent(settings):
 
 
     outfile_name_soil_map_resampled = settings.get('path_IPCC_soil_resampled')
-    resample_raster_to_ref(soil_map_to_resample,CLC_ref_file, Country,outfile_name_soil_map_resampled.parent.as_posix(),
+    resample_raster_to_ref(soil_map_to_resample,CLC_ref_file, Country,
+                           Path(outfile_name_soil_map_resampled).parent.as_posix(),
                            resample_factor=1, overwrite=overwrite,
                            resampling=True,
-                           outname=outfile_name_soil_map_resampled.name)
+                           outname=Path(outfile_name_soil_map_resampled).name)
 
     ### IPCC climate resampling
     outfile_name_climate_resampled = settings.get('path_IPCC_climate_resampled')
-    resample_raster_to_ref(climate_map_to_resample,CLC_ref_file, Country,Path(outfile_name_climate_resampled).parent.as_posix(),
+    resample_raster_to_ref(climate_map_to_resample,CLC_ref_file, Country,
+                           Path(outfile_name_climate_resampled).parent.as_posix(),
                            resample_factor=1, overwrite=overwrite,
                            resampling=True,
-                           outname=outfile_name_climate_resampled.name)
+                           outname=Path(outfile_name_climate_resampled).name)
 
     ### Now the SOC REF will be created based on IPCC soil and climate data
     create_SOC_REF_raster(settings)
@@ -249,7 +251,7 @@ def SOC_strat_IPCC_full_extent(settings):
     create_factor_layer(settings, type_factor='FI'
                         ,fixed_factor_creation=settings.get('Fixed_factor_FI'))
 
-    ### NOW THE FINAL SOC BASED ON THE DEFINED SCENARIO CAN BE CALCULATED
+    # ### NOW THE FINAL SOC BASED ON THE DEFINED SCENARIO CAN BE CALCULATED
     create_SOC_scenario_layer(settings)
 
 
