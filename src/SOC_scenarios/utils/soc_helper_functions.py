@@ -867,6 +867,7 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
     lst_df_stats_NUTS = []
 
     for FLU_class in df_FLU_mapping['IPCC_landuse_id'].unique():
+        LU_name = df_FLU_mapping.loc[df_FLU_mapping.IPCC_landuse_id == FLU_class]['IPCC_landuse_name'].values[0]
         raster_values_FLU_filter = np.copy(raster_values)
         raster_values_FLU_filter[np.where(FLU_raster != FLU_class)] = no_data
         stats = zonal_stats(spatial_layer.geometry, raster_values_FLU_filter, affine=affine,
@@ -899,7 +900,7 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
         df_stats['FI_factor'] = dict_FI_factors_info.get(IPCC_cat).get('FI')
         df_stats['FI_src'] = dict_FI_factors_info.get(IPCC_cat).get('input_source')
 
-        if settings.get('Fixed_factor_FLU'):
+        if settings.get('Fixed_factor_FLU') and LU_name == 'Cropland':
             if IPCC_cat in settings.get('Stock_change_scenario').keys():
                 df_stats['FLU_factor'] = settings.get('Stock_change_scenario').get('Cropland').get('FLU')
                 df_stats['FLU_src'] = 'EEA39'
