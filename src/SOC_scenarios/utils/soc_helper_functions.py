@@ -621,14 +621,15 @@ def create_SOC_scenario_layer(settings):
 
 
 
-def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_factor: str) -> dict:
-    folder = settings.get('SOC_NUTS_factors_folder')
+def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_factor: str,
+                          id_LUT_carbon_pool: str = 'SOC') -> dict:
+    folder = settings.get(f'{id_LUT_carbon_pool}_NUTS_factors_folder')
     NUTS_info = settings.get('NUTS3_info')
 
     dict_scenario = {}
     for crop in dict_default_scenario.keys():
-        file_dir_NUTS3 = os.path.join(folder, 'NUTS_LEVEL3_SOC_scenarios_{}.txt'.format(crop.lower()))
-        file_dir_NUTS0 = os.path.join(folder, 'NUTS_LEVEL0_SOC_scenarios_{}.txt'.format(crop.lower()))
+        file_dir_NUTS3 = os.path.join(folder, f'NUTS_LEVEL3_{id_LUT_carbon_pool}_scenarios_{crop.lower()}.txt')
+        file_dir_NUTS0 = os.path.join(folder, f'NUTS_LEVEL0_{id_LUT_carbon_pool}_scenarios_{crop.lower()}.txt')
 
         df_NUTS3 = pd.read_csv(file_dir_NUTS3, sep='\t')
         df_NUTS0 = pd.read_csv(file_dir_NUTS0, sep='\t')
@@ -645,10 +646,20 @@ def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_fact
                 dict_scenario.update({crop:{type_factor: dict_default_scenario.get(crop).get(type_factor),
                                             'input_source': 'EEA39'}})
             else:
-                dict_scenario.update({crop:{type_factor: int(factor_NUTS0),
+                ## check if can convert to integer:
+                try:
+                    factor_NUTS0 = int(factor_NUTS0)
+                except:
+                    factor_NUTS0 = factor_NUTS0
+                dict_scenario.update({crop:{type_factor: factor_NUTS0,
                                             'input_source': 'NUTS0'}})
         else:
-            dict_scenario.update({crop:{type_factor: int(factor_NUTS3),
+            ## check if can convert to integer:
+            try:
+                factor_NUTS3 = int(factor_NUTS3)
+            except:
+                factor_NUTS3 = factor_NUTS3
+            dict_scenario.update({crop:{type_factor: factor_NUTS3,
                                         'input_source': 'NUTS3'}})
 
     return dict_scenario
