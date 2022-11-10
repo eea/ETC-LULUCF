@@ -219,7 +219,7 @@ def SOC_strat_IPCC_full_extent(settings):
 
 
     outfile_name_soil_map_resampled = settings.get('path_IPCC_soil_resampled')
-    resample_raster_to_ref(soil_map_to_resample,CLC_ref_file, Country,
+    resample_raster_to_ref(soil_map_to_resample, CLC_ref_file, Country,
                            Path(outfile_name_soil_map_resampled).parent.as_posix(),
                            resample_factor=1, overwrite=overwrite,
                            resampling=True,
@@ -265,12 +265,13 @@ def main_stratification(settings):
     #### In the first place the needed datasets will be
     # uploaded and will be checked if they are all in the same format
 
-    SOC_method = settings.get('SOC_method')
+    type_method = settings.get('type_method')
     block_based_processing = settings.get('block_based_processing')
+    carbon_pool = settings.get('carbon_pool')
 
-    if SOC_method == 'IPCC' and not block_based_processing:
+    if (type_method == 'LUT' and not block_based_processing) and carbon_pool == 'SOC' :
         SOC_strat_IPCC_full_extent(settings)
-    elif SOC_method == 'IPCC' and block_based_processing:
+    elif (type_method == 'LUT' and block_based_processing) and carbon_pool == 'SOC':
         SOC_strat_IPCC_block_proc(settings)
 
 
@@ -278,47 +279,12 @@ if __name__ == '__main__':
 
     logger.info('*' * 50)
 
-    ### Some default settings
+    ### Import the default parameters
+    from constants import *
 
-    dir_signature = 'L:'
-    overwrite = False
-    Basefolder_strata = os.path.join(dir_signature, 'etc', 'lulucf', 'strata')
     SOC_LUT_folder = os.path.join(Basefolder_strata, 'SOC_LUT')
+    os.makedirs(SOC_LUT_folder, exist_ok=True)
 
-
-    Basefolder_input_data = os.path.join(dir_signature,'etc','lulucf','input_data')
-    CLC_ACC_folder = os.path.join(dir_signature, 'input_data', 'general', 'CLCACC')
-    SOC_method = 'IPCC' ### if the scenarios should be made based on IPCC defaul values
-
-    shp_extent_map = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','EEA39_extent_noDOM.shp'))
-
-
-    path_IPCC_climate_resampled = os.path.join(Basefolder_input_data,'IPCC', 'IPCC_data_converted', 'climate_final_map',
-                                                                  'ipcc_climate_zone_100m_EPSG3035_EEA39.tif')
-    path_IPCC_soil_resampled = os.path.join(Basefolder_input_data,'IPCC', 'IPCC_data_converted', 'soil_final_map',
-                                                              'ipcc_soil_type_100m_EPSG3035_EEA39.tif')
-
-
-    #LUT CLC IPCC MAPPING
-
-    CLC_IPCC_mapping = {
-        'Forest': {'CLC_classes': [311,312,313,324,334],
-                   'ID_class': 1},
-        'Cropland': {'CLC_classes': [211,212,213,221,222,223,
-                                    241,242,243,244],
-                     'ID_class': 2},
-        'Grassland': {'CLC_classes': [231,321,322,323],
-                      'ID_class': 3},
-        'Wetlands': {'CLC_classes': [411,412,421,422,423
-            ,511,512,521,522,523],
-                     'ID_class':4},
-        'Settlements': {'CLC_classes': [111,112,121,
-                                        122,123,124,
-                                        131,132,133,
-                                        141,142],
-                        'ID_class': 5},
-        'Other_land': {'CLC_classes': [331,332,333,335],
-                       'ID_class': 6}}
 
     ###### SPECIFY SOME SCENARIO (FLU & FMG & FI) WITH DIFFERENT STOCK CHANGE
     # FACTORS FROM IPCC TO MAP THE SOC RESULT
@@ -380,7 +346,6 @@ if __name__ == '__main__':
     ### extension that is used to distinguish different scenario runs
     scenario_name = 'Scenario_1_baseline'
 
-
     ### Country_running
     Country = None #set to None if want to run entire EEA39 extent
     shp_NUTS_borders = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','NUTS_RG_20M_2021_3035.shp'))
@@ -413,7 +378,7 @@ if __name__ == '__main__':
                 'overwrite': overwrite,
                 'Basefolder_input_data': Basefolder_input_data,
                 'Basefolder_output': Basefolder_strata,
-                'SOC_method': SOC_method,
+                'type_method': type_method,
                 'EEA_extent_map': shp_extent_map,
                 'NUTS_extent_map': shp_NUTS_borders,
                 'CLC_ACC_folder': CLC_ACC_folder,
@@ -431,6 +396,7 @@ if __name__ == '__main__':
                 'path_IPCC_climate_resampled': path_IPCC_climate_resampled,
                 'path_IPCC_soil_resampled': path_IPCC_soil_resampled,
                 'add_stats_NUTS_level': add_stats_NUTS_level,
+                'carbon_pool': 'SOC',
                 'commit_id': 'a06843d97f3d2de96e461570f8e1c537dca9579a'}
 
     main_stratification(settings)
