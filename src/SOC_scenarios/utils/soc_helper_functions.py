@@ -120,7 +120,7 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
 
     ### load default parameters
     SOC_LUT_folder = Path(settings.get('SOC_LUT_folder')).as_posix()
-    year_focus = settings.get('year_focus')
+    year_baseline = settings.get('year_baseline')
     CLC_ACC_folder_original = settings.get('CLC_ACC_folder')
     CLC_ACC_folder_Country = Path(settings.get('Basefolder_input_data')).joinpath('CLC_ACC')
     overwrite = settings.get('overwrite')
@@ -128,10 +128,10 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
     Basefolder_output_data = settings.get('Basefolder_output')
 
     if settings.get('Country') is None or settings.get('block_based_processing'):
-        CLC_ACC_file = [item for item in glob.glob(os.path.join(CLC_ACC_folder_original, '*.tif')) if 'CLC{}'.format(str(year_focus)) in Path(item).stem][0]
+        CLC_ACC_file = [item for item in glob.glob(os.path.join(CLC_ACC_folder_original, '*.tif')) if 'CLC{}'.format(str(year_baseline)) in Path(item).stem][0]
     else:
         CLC_ACC_file = [item for item in glob.glob(os.path.join(CLC_ACC_folder_Country, settings.get('Country'), '*.tif'))
-                        if 'CLC{}'.format(str(year_focus)) in Path(item).stem][0]
+                        if 'CLC{}'.format(str(year_baseline)) in Path(item).stem][0]
 
     ### open LUT FLU mapping
     df_CLC_FLU_conversion = pd.read_csv(os.path.join(SOC_LUT_folder, 'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
@@ -370,7 +370,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
         outdir_IPCC_LUCAT = Path(Basefolder_strata_output).joinpath('CLC_ACC_IPCC')
     else:
         outdir_IPCC_LUCAT = Path(Basefolder_strata_output).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
-    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_focus"))))
+    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_baseline"))))
     df_CLC_FLU_conversion = pd.read_csv(os.path.join(Basefolder_LUT, 'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
 
     ### Define the output directory where the result will be stored
@@ -841,7 +841,7 @@ def rescale_raster(raster_file,outdir, rescale_factor):
     return os.path.join(outdir, outname)
 
 
-def add_atrributes_SOC_stats(spatial_layer: gpd, level_NUTS_focus = None, spatial_resolution: int = 100) -> gpd:
+def add_atrributes_stats(spatial_layer: gpd, level_NUTS_focus = None, spatial_resolution: int = 100) -> gpd:
     """
     Function that will insert some additional columns that could be used for the interpretation or analysis
     of the SOC stats.
@@ -886,7 +886,7 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
     else:
         outdir_IPCC_LUCAT = Path(settings.get('Basefolder_output')).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
 
-    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_focus"))))[0]
+    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_baseline"))))[0]
 
 
     FLU_raster, meta = open_raster_from_window(CLC_IPCC_LUCAT_dir, spatial_layer.geometry.bounds)
@@ -983,9 +983,19 @@ def calc_weighted_average_NUTS(df_stats_NUTS_small: pd.DataFrame, NUTS_layer: gp
             df_NUTS3_matched_filter = df_NUTS3_matched_filter.dropna()
             tot_pixel = df_NUTS3_matched_filter['nr_pixels'].sum()
             df_NUTS3_matched_filter['weight'] = df_NUTS3_matched_filter['nr_pixels']/ tot_pixel
-            mean_value_NUTS_region = np.round((df_NUTS3_matched_filter['weight']
-                                               * df_NUTS3_matched_filter['SOC_mean']).mean(),2)
-            df_stats_NUTS_region = pd.DataFrame([mean_value_NUTS_region], columns= ['SOC_mean'])
+            ## now define the columns for which the weighted average should be taken
+            columns_df = list(df_NUTS3_matched_filter.columns.values)
+            ## only the columns for which the mean is taken will be used for the weighted average
+            columns_df_filtered = [item for item in columns_df if 'mean' in item]
+
+            lst_mean_value_NUTS_region = []
+            for column in columns_df_filtered:
+                mean_value_NUTS_region = np.round((df_NUTS3_matched_filter['weight']
+                                                   * df_NUTS3_matched_filter[column]).mean(),2)
+                lst_mean_value_NUTS_region.append(mean_value_NUTS_region)
+
+            df_stats_NUTS_region = pd.DataFrame(lst_mean_value_NUTS_region).T
+            df_stats_NUTS_region.columns = columns_df_filtered
             df_stats_NUTS_region['nr_pixels'] = [tot_pixel]
             df_stats_NUTS_region['IPCC_cat'] = [IPCC_cat]
             df_stats_NUTS_region['NUTS_LEVEL'] = [str(level_focus)]
