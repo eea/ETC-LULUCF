@@ -18,9 +18,13 @@ from Biomass.utils.biom_helper_functions import \
     (define_affor_areas,
      create_affor_potential,
     align_raster_data_reference,
-     create_metadata_description_afforestation)
+     create_metadata_description_afforestation,
+     calc_stats_biomass_NUTS)
 
-from SOC_scenarios.utils.soc_helper_functions import add_metadata_raster
+from SOC_scenarios.utils.soc_helper_functions import \
+    (add_metadata_raster,
+    calc_weighted_average_NUTS,
+     add_atrributes_stats)
 
 
 def afforestation_LUT_block_proc(settings: dict):
@@ -90,7 +94,6 @@ def afforestation_LUT_block_proc(settings: dict):
     lst_raster_files = []
     lst_NUTS_stats = []
     for index, NUTS3_region in shp_NUTS.iterrows():
-
         logger.info(f'CALCULATING {carbon_pool} FOR NUTS3 REGION: {NUTS3_region.NUTS_ID} \n'
                     f'{np.round((index/shp_NUTS.shape[0]) *100,2)}% COMPLETED')
         settings.update({'NUTS3_info': NUTS3_region})
@@ -122,6 +125,48 @@ def afforestation_LUT_block_proc(settings: dict):
             #### ADD SOME METADATA FOR SOC SCENARIO
             dict_general, dict_band = create_metadata_description_afforestation(settings, extent='NUTS')
             add_metadata_raster(dict_general, dict_band, os.path.join(outfolder, outname_affor_pot))
+
+        ### check if some stats of the map need to be provided
+        if settings.get('add_stats_NUTS_level') is not None:
+
+            df_stats_NUTS = calc_stats_biomass_NUTS(os.path.join(outfolder, outname_scenario)
+                                                , NUTS3_region,settings)
+            lst_NUTS_stats.append(df_stats_NUTS)
+
+    if settings.get('add_stats_NUTS_level') is not None:
+
+        ### define output folder for writing the result
+        if settings.get('Country') is not None:
+            outfolder = Path(settings.get('Basefolder_output')).joinpath(f'{settings.get("carbon_pool")}NUTS_stats').joinpath(settings.get('Country'))
+            outname = f'SOC_stats_NUTS_{settings.get("Country")}_{settings.get("Scenario_name")}.geojson'
+
+        else:
+            outfolder = Path(settings.get('Basefolder_output')).joinpath(f'{settings.get("carbon_pool")}_NUTS_stats')
+            outname = f'{settings.get("carbon_pool")}_stats_NUTS_EEA39_{settings.get("Scenario_name")}.geojson'
+
+        outfolder.mkdir(parents=True, exist_ok=True)
+
+        if not os.path.exists(Path(outfolder).joinpath(outname)) or settings.get('overwrite'):
+            df_stats_all_NUTS3 = pd.concat(lst_NUTS_stats)
+
+            ## now that the NUTS3 is calculated also the weighted average at NUTS LEVEL0 can be derived
+            df_stats_NUTS_final = calc_weighted_average_NUTS(df_stats_all_NUTS3, settings.get('NUTS_extent_map'))
+
+
+            ## create now geodataframe out of it and write out the result
+            gpd_NUTS_stats = gpd.GeoDataFrame(df_stats_NUTS_final, geometry=df_stats_NUTS_final.geometry)
+
+            ## add additional attribute tables that enable to interpret the results
+            gpd_NUTS_stats = add_atrributes_stats(gpd_NUTS_stats, level_NUTS_focus=3)
+
+
+            ## write out the result
+            gpd_NUTS_stats.crs = shp_NUTS.crs
+            if outname.endswith('geojson'):
+                gpd_NUTS_stats.to_file(Path(outfolder).joinpath(outname), driver='GeoJSON')
+            else:
+                gpd_NUTS_stats.to_file(Path(outfolder).joinpath(outname))
+
 
 
 
@@ -255,7 +300,7 @@ if __name__ == '__main__':
                 'afforestation_scenario': dict_default_afforestation_factors,
                 'dict_afforestation_masking_layers': dict_afforestation_masking_layers,
                 'LUT_folder': Biom_LUT_folder,
-                'commit_id': 'a06843d97f3d2de96e461570f8e1c537dca9579a'}
+                'commit_id': 'f73a0dcd4f963d2a06e4574c5e72b8b2c12d9a6b'}
 
     main_afforestation(settings)
 
