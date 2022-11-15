@@ -21,6 +21,7 @@ import osr
 from osgeo import gdal
 import rasterio
 import datetime
+from rasterstats import zonal_stats
 
 def define_affor_areas(settings, slope_max = 87.5):
     """
@@ -367,29 +368,29 @@ def create_affor_potential(settings, affor_mask_array):
                                                            0.47*scaling * A_pixel_ha)
 
 
-                ### ensure that the nodata pixels in one of the layers are set back to no data
-                affor_yrly_pot_raster[CLC_IPCC_LUCAT_raster == no_data_IPCC_LUCAT] = 65535
+            ### ensure that the nodata pixels in one of the layers are set back to no data
+            affor_yrly_pot_raster[CLC_IPCC_LUCAT_raster == no_data_IPCC_LUCAT] = 65535
 
-                write_raster(np.expand_dims(affor_yrly_pot_raster,0),meta_raster,transform_raster,Path(outdir_affor_pot)
-                             , outname_affor_pot)
+            write_raster(np.expand_dims(affor_yrly_pot_raster,0),meta_raster,transform_raster,Path(outdir_affor_pot)
+                         , outname_affor_pot)
 
 
-                ### apply a cropping of the raster so that cells outside the extent are set to nodata
-                if settings.get('block_based_processing'):
-                    NUTS_gpd = gpd.GeoDataFrame(geometry=[settings.get('NUTS3_info').geometry])
-                    outdir_raster = Path(outdir_affor_pot).joinpath(outname_affor_pot).as_posix()
-                    mask_raster_extent([Path(outdir_affor_pot).joinpath(outname_affor_pot).as_posix()],NUTS_gpd,
-                                       Path(outdir_affor_pot), settings, overwrite= overwrite)
-                    ## remove the unclipped file and the rename the clipped file to the final output name
-                    os.remove(outdir_raster)
-                    os.rename(Path(outdir_affor_pot).joinpath(outname_affor_pot.replace('.tif', '_clipped.tif')).as_posix(),
-                              outdir_raster)
+            ### apply a cropping of the raster so that cells outside the extent are set to nodata
+            if settings.get('block_based_processing'):
+                NUTS_gpd = gpd.GeoDataFrame(geometry=[settings.get('NUTS3_info').geometry])
+                outdir_raster = Path(outdir_affor_pot).joinpath(outname_affor_pot).as_posix()
+                mask_raster_extent([Path(outdir_affor_pot).joinpath(outname_affor_pot).as_posix()],NUTS_gpd,
+                                   Path(outdir_affor_pot), settings, overwrite= overwrite)
+                ## remove the unclipped file and the rename the clipped file to the final output name
+                os.remove(outdir_raster)
+                os.rename(Path(outdir_affor_pot).joinpath(outname_affor_pot.replace('.tif', '_clipped.tif')).as_posix(),
+                          outdir_raster)
 
-                    affor_yrly_pot_raster_clipped, _ = open_raster_from_window(outdir_raster, bounds)
+                affor_yrly_pot_raster_clipped, _ = open_raster_from_window(outdir_raster, bounds)
 
-                    return affor_yrly_pot_raster_clipped, outname_affor_pot
-                else:
-                    return affor_yrly_pot_raster, outname_affor_pot
+                return affor_yrly_pot_raster_clipped, outname_affor_pot
+            else:
+                return affor_yrly_pot_raster, outname_affor_pot
 
 
     else:
@@ -529,6 +530,126 @@ def create_metadata_description_afforestation(settings: dict, extent: str = 'EEA
     }
 
     return dict_general, dict_band
+
+
+
+def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
+                        settings: dict, stats_type: list = ['mean', 'count'], calc_BGB:bool=True
+                            , RTS_ratio:float = 0.25) -> pd.DataFrame:
+    """
+    :param raster_dir: the directory of the raster on which the stats should be calculated
+    :param spatial_layer: the geospatial layer that will be used to determine the areas for aggregation
+    :param settings: dictionary with some settings that are needed to do the aggregation
+    :param stats_type: indicate the type of statistics should be derived from the raster
+    :return: dataframe with the calculated stats
+    """
+
+    raster_object = rasterio.open(raster_dir)
+    raster_values = raster_object.read(1)
+    affine = raster_object.meta.get('transform')
+    no_data = raster_object.meta.get('nodata')
+    scaling = settings.get('Scaling')
+
+    ## load some settings
+    year_baseline = settings.get('year_baseline')
+    year_potential = settings.get('year_potential')
+
+    ### Open the FLU layer on which a distinction is made
+    ### per IPCC LU type
+    if settings.get('Country') is None or settings.get('block_based_processing'):
+        outdir_IPCC_LUCAT = Path(settings.get('Basefolder_output')).joinpath('CLC_ACC_IPCC')
+    else:
+        outdir_IPCC_LUCAT = Path(settings.get('Basefolder_output')).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
+
+    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_baseline"))))[0]
+
+
+    FLU_raster, meta = open_raster_from_window(CLC_IPCC_LUCAT_dir, spatial_layer.geometry.bounds)
+
+    ## load the way the CLC layer is translated to IPCC LUCAT
+    df_FLU_mapping = pd.read_csv(os.path.join(settings.get('Basefolder_output'),
+                                                      'SOC_LUT',
+                                                      f'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
+    lst_df_stats_NUTS = []
+
+    # ## Load the specific defined parameters (at EU or NUTS scale) used to calculate the potential
+    # factor_scenario = settings.get('afforestation_scenario')
+
+    for FLU_class in df_FLU_mapping['IPCC_landuse_id'].unique():
+        raster_values_FLU_filter = np.copy(raster_values)
+        raster_values_FLU_filter[np.where(FLU_raster != FLU_class)] = no_data
+        stats = zonal_stats(spatial_layer.geometry, raster_values_FLU_filter, affine=affine,
+                            nodata=no_data, stats=stats_type)
+        df_stats = pd.DataFrame.from_dict(stats)
+        df_stats.columns = [f'{settings.get("carbon_pool")}_mean_yrly', 'nr_pixels']
+        ## add the outcome to the proper scale
+        df_stats[f'{settings.get("carbon_pool")}_mean_yrly'] = df_stats[f'{settings.get("carbon_pool")}_mean_yrly']/scaling
+        df_stats = df_stats.round(2)
+        # derive the IPCC_cat for which the stats are calculated
+        IPCC_cat = df_FLU_mapping.loc[df_FLU_mapping['IPCC_landuse_id'] == FLU_class] \
+            ['IPCC_landuse_name'].values[0]
+
+        ## add the below ground biomass value based on the ABGB as well
+        value_ABG_NUTS = df_stats[f'{settings.get("carbon_pool")}_mean_yrly'].values[0]
+        if calc_BGB:
+            if value_ABG_NUTS == no_data:
+                df_stats['BGB_biomass_mean_yrly'] = no_data
+            else:
+                df_stats['BGB_biomass_mean_yrly'] = df_stats[f'{settings.get("carbon_pool")}_mean_yrly'] * RTS_ratio
+
+        ## calculate now the total potential of carbon increase at the year based on the difference
+        # between the potential year and the baseline year
+        nr_years_future = int(year_potential - year_baseline)
+        if value_ABG_NUTS != no_data:
+            df_stats[f'{settings.get("carbon_pool")}_mean_{str(year_potential)}'] = df_stats[f'{settings.get("carbon_pool")}' \
+                                                                                        f'_mean_yrly']*nr_years_future
+            df_stats[f'BGB_biomass_mean_{str(year_potential)}'] = df_stats['BGB_biomass_mean_yrly'] * nr_years_future
+        else:
+            df_stats[f'{settings.get("carbon_pool")}_mean_{str(year_potential)}'] = no_data
+            df_stats[f'BGB_biomass_mean_{str(year_potential)}'] = no_data
+
+
+
+        df_stats['IPCC_cat'] = IPCC_cat
+        df_stats['NUTS_ID'] = spatial_layer.NUTS_ID
+        df_stats['NUTS_LEVEL'] = spatial_layer.LEVL_CODE
+
+        ### Assign also used factors for the calculation to shapefile
+        if settings.get('run_NUTS_specific_scenario'):
+            dict_Slope_factors_info = get_factors_from_NUTS(settings, settings.get('afforestation_scenario'), 'Slope',
+                                                            id_LUT_carbon_pool='afforestation')
+            dict_Tree_prob_factors_info = get_factors_from_NUTS(settings, settings.get('afforestation_scenario'), 'Tree_prob',
+                                                            id_LUT_carbon_pool='afforestation')
+            dict_Tree_species_factors_info = get_factors_from_NUTS(settings, settings.get('afforestation_scenario'), 'Tree_species',
+                                                            id_LUT_carbon_pool='afforestation')
+
+        else:
+            dict_Slope_factors_info = settings.get('afforestation_scenario')
+            dict_Tree_prob_factors_info = settings.get('afforestation_scenario')
+            dict_Tree_species_factors_info = settings.get('afforestation_scenario')
+
+        if not IPCC_cat in dict_Slope_factors_info.keys():
+                ### Factors are not defined for this crop type
+                continue
+        df_stats['Slope_factor'] = dict_Slope_factors_info.get(IPCC_cat).get('Slope')
+        df_stats['Slope_src'] = dict_Slope_factors_info.get(IPCC_cat).get('input_source')
+
+        df_stats['Tree_prob'] = dict_Tree_prob_factors_info.get(IPCC_cat).get('input_source')
+        df_stats['Tree_prob_src'] = dict_Tree_prob_factors_info.get(IPCC_cat).get('input_source')
+
+        df_stats['Tree_species_factor'] = dict_Tree_species_factors_info.get(IPCC_cat).get('Tree_species')
+        df_stats['Tree_species_src'] = dict_Tree_species_factors_info.get(IPCC_cat).get('input_source')
+
+        RCP_scenario = settings.get('afforestation_scenario').get(IPCC_cat).get('RCP')
+        Year_potential = settings.get('afforestation_scenario').get(IPCC_cat).get('Year_potential')
+        df_stats['RCP'] = RCP_scenario
+        df_stats['Year_potential'] = Year_potential
+
+
+        df_stats['geometry'] = [spatial_layer.geometry]
+        lst_df_stats_NUTS.append(df_stats)
+
+    return pd.concat(lst_df_stats_NUTS)
 
 
 
