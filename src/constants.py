@@ -49,6 +49,6 @@ CLC_IPCC_mapping = {
 
 # LUT management activaties and carbon pool
 
-dict_C_pool_mng_options = {'afforestation': 'biomass',
+dict_C_pool_mng_options = {'afforestation': 'ABGbiomass',
                            'cropland_management': 'SOC',
                            'grassland_management': 'SOC'}
