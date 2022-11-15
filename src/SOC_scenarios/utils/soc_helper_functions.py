@@ -681,7 +681,7 @@ def write_raster(out_image,out_meta, out_transform, outdir, outname):
                 band_result = out_image[band,:,:]
                 dest.write_band(band+1, band_result)
 
-def downsize_raster(input_raster_file, overwrite):
+def downsize_raster(input_raster_file, overwrite, dtype):
     outfile = Path(input_raster_file).parent.joinpath(Path(input_raster_file).stem + '_downsized.tif').as_posix()
 
     if not os.path.exists(outfile) and not overwrite:
@@ -692,10 +692,26 @@ def downsize_raster(input_raster_file, overwrite):
             out_transform = file.transform
             nodata_value = file.nodata
 
-        downsized_raster = np.full(ref_raster.shape,255).astype(out_meta.get('dtype'))
-        downsized_raster[ref_raster != nodata_value] = ref_raster[ref_raster != nodata_value]
+        if dtype is None: ## by default uint8 dtype
+            downsized_raster = np.full(ref_raster.shape,255).astype(out_meta.get('dtype'))
+            downsized_raster[ref_raster != nodata_value] = ref_raster[ref_raster != nodata_value]
+            out_meta.update({'nodata': 255,
+                             'dtype': 'uint8'})
+        else:
+            if dtype == 'UInt8':
+                downsized_raster = np.full(ref_raster.shape,255).astype('uin8')
+                downsized_raster[ref_raster != nodata_value] = ref_raster[ref_raster != nodata_value]
+                out_meta.update({'nodata': 255,
+                                 'dtype': 'uint8'})
+            elif dtype == 'UInt16':
+                downsized_raster = np.full(ref_raster.shape,65535).astype('uint16')
+                downsized_raster[ref_raster != nodata_value] = ref_raster[ref_raster != nodata_value]
+                out_meta.update({'nodata': 65535,
+                                 'dtype': 'uint16'})
+            else:
+                raise ValueError('DTYPE NOT SUPPORTED!')
 
-        out_meta.update({'nodata': 255})
+
         write_raster(np.expand_dims(downsized_raster,0),out_meta,out_transform,Path(outfile).parent, Path(outfile).name)
         os.unlink(input_raster_file)
         ## give again the original name to the file
@@ -703,8 +719,8 @@ def downsize_raster(input_raster_file, overwrite):
 
 
 def resample_raster_to_ref(raster_files_to_clip, raster_file_ref, MS_focus, outdir, overwrite,
-                        outname, resample_method = 'near', resample_factor = 1, scale_factor = 1, resampling = False,
-                           ):
+                        outname, resample_method='near', resample_factor = 1, scale_factor = 1, resampling = False,
+                           dtype = None):
 
     for raster_file in raster_files_to_clip:
 
@@ -716,19 +732,22 @@ def resample_raster_to_ref(raster_files_to_clip, raster_file_ref, MS_focus, outd
         if os.path.exists(os.path.join(outdir, outname)):
             os.unlink(os.path.join(outdir, outname))
 
+        #know the original EPSG
+        epsg_from = osr.SpatialReference(wkt = gdal.Open(raster_file).GetProjection()).GetAttrValue('AUTHORITY',1)
+
         ds_reference = gdal.Open(raster_file_ref)
         ds_transform = ds_reference.GetGeoTransform()
         proj = osr.SpatialReference(wkt =ds_reference.GetProjection())
-        epsg = proj.GetAttrValue('AUTHORITY',1)
+        epsg_to = proj.GetAttrValue('AUTHORITY',1)
         upper_left_corner_x = ds_transform[0]
         upper_left_corner_y = ds_transform[3]
         lower_right_corner_x = upper_left_corner_x + (ds_reference.RasterXSize * ds_transform[1])
         lower_right_corner_y = upper_left_corner_y + (ds_reference.RasterYSize * ds_transform[-1])
         if resampling:
-            cmd_warp = f'gdalwarp --config GDAL_CACHEMAX 256 -co COMPRESS=LZW -s_srs epsg:{epsg} -t_srs epsg:{epsg} -te {str(upper_left_corner_x)} {str(lower_right_corner_y)} {str(lower_right_corner_x)} {str(upper_left_corner_y)}' \
+            cmd_warp = f'gdalwarp --config GDAL_CACHEMAX 256 -co COMPRESS=LZW -s_srs epsg:{epsg_from} -t_srs epsg:{epsg_to} -te {str(upper_left_corner_x)} {str(lower_right_corner_y)} {str(lower_right_corner_x)} {str(upper_left_corner_y)}' \
                        f' -tr {ds_transform[1]*resample_factor} {abs(ds_transform[-1])*resample_factor} -of GTiff {raster_file} {os.path.join(outdir, outname)} -r {resample_method}'
         else:
-            cmd_warp = f'gdalwarp -s_srs epsg:{epsg} -t_srs epsg:{epsg} -te {str(upper_left_corner_x)} {str(lower_right_corner_y)} {str(lower_right_corner_x)} {str(upper_left_corner_y)}' \
+            cmd_warp = f'gdalwarp -s_srs epsg:{epsg_from} -t_srs epsg:{epsg_to} -te {str(upper_left_corner_x)} {str(lower_right_corner_y)} {str(lower_right_corner_x)} {str(upper_left_corner_y)}' \
                        f'  -ts -of GTiff {raster_file} {os.path.join(outdir, outname)} -r {resample_method}'
 
         try:
@@ -742,7 +761,7 @@ def resample_raster_to_ref(raster_files_to_clip, raster_file_ref, MS_focus, outd
             os.rename(outname_tmp, os.path.join(outdir, outname))
 
         ### reduce the size of the raster because gdal is not that efficient
-        downsize_raster(os.path.join(outdir, outname), overwrite)
+        downsize_raster(os.path.join(outdir, outname), overwrite, dtype)
 
 
 
