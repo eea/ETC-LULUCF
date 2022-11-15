@@ -14,7 +14,7 @@ from SOC_scenarios.utils.soc_helper_functions import mask_raster_extent\
     ,create_SOC_scenario_layer, resample_raster_to_ref, mosaic_raster\
     , calc_stats_SOC_NUTS, calc_weighted_average_NUTS, \
     create_metadata_description_SOC, add_metadata_raster,\
-    add_atrributes_SOC_stats
+    add_atrributes_stats
 
 
 def SOC_strat_IPCC_block_proc(settings: dict):
@@ -129,7 +129,7 @@ def SOC_strat_IPCC_block_proc(settings: dict):
             gpd_NUTS_stats = gpd.GeoDataFrame(df_stats_NUTS_final, geometry=df_stats_NUTS_final.geometry)
 
             ## add additional attribute tables that enable to interpret the results
-            gpd_NUTS_stats = add_atrributes_SOC_stats(gpd_NUTS_stats, level_NUTS_focus=3)
+            gpd_NUTS_stats = add_atrributes_stats(gpd_NUTS_stats, level_NUTS_focus=3)
 
 
             ## write out the result
@@ -373,7 +373,7 @@ if __name__ == '__main__':
 
     scaling = 100 # the scaling that is used on the factors to avoid working in float
 
-    settings = {'year_focus': 2018,
+    settings = {'year_baseline': 2018,
                 'dir_signature': dir_signature,
                 'overwrite': overwrite,
                 'Basefolder_input_data': Basefolder_input_data,
