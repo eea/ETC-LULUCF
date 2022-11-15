@@ -14,7 +14,13 @@ from loguru import logger
 import numpy as np
 
 ### load the needed functions
-from Biomass.utils.biom_helper_functions import define_affor_areas, create_affor_potential
+from Biomass.utils.biom_helper_functions import \
+    (define_affor_areas,
+     create_affor_potential,
+    align_raster_data_reference,
+     create_metadata_description_afforestation)
+
+from SOC_scenarios.utils.soc_helper_functions import add_metadata_raster
 
 
 def afforestation_LUT_block_proc(settings: dict):
@@ -48,8 +54,25 @@ def afforestation_LUT_block_proc(settings: dict):
     else:
         shp_NUTS = shp_NUTS.loc[shp_NUTS.LEVL_CODE == 3]
 
+    """RESAMPLING THE EU4TREES DATA TO THE REFERENCE RESOLUTION AND FORMAT"""
+    ###### Ensure that the needed EU4Trees raster is in the proper resolution and extent
+    # If the EU-Trees4F data is not yet in the proper projection system and resolution --> first resample
+    Basefolder_input_data = settings.get('Basefolder_input_data')
+    Folder_EUtrees4F_prob = os.path.join(Basefolder_input_data, 'EU-Trees4F', 'ens_sdms', 'prob')
+    Prob_files = glob.glob(os.path.join(Folder_EUtrees4F_prob, '*.tif'))
 
-    # TODO ADD SOME CODE THAT AUTOMATICALLY GENERATES THE CLC ACC IPCC LAYER OF NOT PRESENT
+    ## filter only on the tree species for which we have LUT
+    LUT_tree_species = list(pd.read_csv(os.path.join(settings.get('Basefolder_output'),
+                                                       'NUTS_LUT_afforestation_scenario',
+                                                       f'EU4_trees_LUT_biom_increment.csv'), sep=';').Tree_species)
+    Prob_files_filtered = [item for item in Prob_files if Path(item).stem.split('_ens')[0] in LUT_tree_species]
+
+    ### need a reference file with the proper resolution and extent
+    CLC_ref_file = os.path.join(settings.get('dir_signature'),'input_data','general','CLCACC', 'CLC2018ACC_V2018_20.tif')
+    for prob_file in Prob_files_filtered:
+        align_raster_data_reference(prob_file, CLC_ref_file, settings.get('EEA_extent_map'), settings)
+
+    # TODO ADD SOME CODE THAT AUTOMATICALLY GENERATES THE CLC ACC IPCC LAYER IF NOT PRESENT
     ## check if the IPCC LU CATEGORIES MAPPING IS AVAILABLE
     file_IPCC_LU_CAT = glob.glob(os.path.join(settings.get('Basefolder_output'), 'CLC_ACC_IPCC',
                                               'CLC2018ACC_V2018_20_IPCC_LU_Categories*.tif'))
@@ -83,6 +106,8 @@ def afforestation_LUT_block_proc(settings: dict):
 
         if not os.path.exists(os.path.join(outfolder, outname_scenario)) or settings.get('overwrite'):
 
+
+            #TODO do not write mask output but just calculate the outcome because the slope is a flexible parameter
             ### STEP 1: Create the afforestation mask
             affor_mask_layer = define_affor_areas(settings)
 
@@ -90,8 +115,13 @@ def afforestation_LUT_block_proc(settings: dict):
                 logger.info(f'AFFORESTATION MASK COULD NOT BE GENERATED FOR NUTS REGION {NUTS3_region} --> skipped')
                 continue
 
+
             ### STEP 2: Create the afforesation carbon potential layer
-            affor_potential_layer = create_affor_potential(settings)
+            affor_potential_layer, outname_affor_pot = create_affor_potential(settings, affor_mask_layer)
+
+            #### ADD SOME METADATA FOR SOC SCENARIO
+            dict_general, dict_band = create_metadata_description_afforestation(settings, extent='NUTS')
+            add_metadata_raster(dict_general, dict_band, os.path.join(outfolder, outname_affor_pot))
 
 
 
@@ -113,7 +143,7 @@ def main_afforestation(settings):
     carbon_pool = dict_C_pool_mng_options.get(mng_option)
 
 
-    if (type_method == 'LUT' and block_based_processing) and carbon_pool == 'biomass':
+    if (type_method == 'LUT' and block_based_processing) and carbon_pool == 'ABGbiomass':
         afforestation_LUT_block_proc(settings)
 
 
@@ -161,14 +191,14 @@ if __name__ == '__main__':
     Year_potential = 2035
     dict_default_afforestation_factors = {
         'Cropland': {'Slope': 5,
-                     'RCP': 'RCP45',
+                     'RCP': 'rcp45',
                      'Tree_prob': 70,
                      'Tree_species': 'Quercus_robur',
                      'Perc_reforest': 50,
                      'Year_potential': Year_potential,
                      'input_source': 'EEA39'},
         'Grassland': {'Slope': 5,
-                      'RCP': 'RCP45',
+                      'RCP': 'rcp45',
                       'Tree_prob': 70,
                       'Tree_species': 'Quercus_robur',
                       'Perc_reforest': 50,
@@ -193,7 +223,7 @@ if __name__ == '__main__':
     ### if want to run with some NUTS specific factors
     ### set the below parameter to true
     ### if a country is defined only the NUTS regions in that country will be considered
-    run_NUTS_specific_scenario = True
+    run_NUTS_specific_scenario = False
     Afforestation_NUTS_factors_folder = os.path.join(Basefolder_strata,'NUTS_LUT_afforestation_scenario')
 
     #### Indicate of stats at NUTS LEVEL need to be provided
