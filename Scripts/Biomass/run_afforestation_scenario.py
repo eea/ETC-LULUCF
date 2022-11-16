@@ -157,7 +157,7 @@ def afforestation_LUT_block_proc(settings: dict):
             gpd_NUTS_stats = gpd.GeoDataFrame(df_stats_NUTS_final, geometry=df_stats_NUTS_final.geometry)
 
             ## add additional attribute tables that enable to interpret the results
-            gpd_NUTS_stats = add_atrributes_stats(gpd_NUTS_stats, level_NUTS_focus=3)
+            gpd_NUTS_stats = add_atrributes_stats(gpd_NUTS_stats, level_NUTS_focus=None)
 
 
             ## write out the result
@@ -300,7 +300,7 @@ if __name__ == '__main__':
                 'afforestation_scenario': dict_default_afforestation_factors,
                 'dict_afforestation_masking_layers': dict_afforestation_masking_layers,
                 'LUT_folder': Biom_LUT_folder,
-                'commit_id': 'f73a0dcd4f963d2a06e4574c5e72b8b2c12d9a6b'}
+                'commit_id': '0cdba7dd4ba63633e5602448a7b1f6723a430737'}
 
     main_afforestation(settings)
 
