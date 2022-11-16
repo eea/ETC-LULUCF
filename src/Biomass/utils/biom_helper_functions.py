@@ -310,7 +310,7 @@ def create_affor_potential(settings, affor_mask_array):
                 Year_potential = factor_scenario.get(LUCAT).get('Year_potential')
 
                 ## now we know the year for the potential, we can select the most closest EU4trees prob year
-                Diff_yrs_prob_predictions = [abs(item- Year_potential) for item in years_EU4trees_pred]
+                Diff_yrs_prob_predictions = [abs(item - Year_potential) for item in years_EU4trees_pred]
                 check_duplicates = set([x for x in Diff_yrs_prob_predictions if Diff_yrs_prob_predictions.count(x) > 1])
 
                 ## if multiple years are of the same distance from a probability layer take the probability layer in the future
@@ -354,18 +354,19 @@ def create_affor_potential(settings, affor_mask_array):
                     loc_affor = np.where((affor_mask_array == 1) & (CLC_IPCC_LUCAT_raster == value_LUCAT) &
                                          (Tree_prob_raster > (tree_prob * 10)))
 
-                    ## The actual potential calculation can now be computed based on a formula as follows
+                    ## The actual potential calculation can now be computed based on a formula as follows:
                     """
                     annual CO2 sink = Volume increment x Density x BEFx Rootoshoot x CF x kg_to_ton
                     Where:
-                    density = 0.5
+                    density = 500
                     BEF= 1.2
                     R= 1.25
                     CF= 0.47
                     kg_to_ton = 1000
                     """
-                    affor_yrly_pot_raster[loc_affor] = int(ann_increment_tree_species * 0.5 * 1.2 * 1.25 *
-                                                           0.47*scaling * A_pixel_ha)
+                    #divide by 1000 to convert to tonC/hayr
+                    affor_yrly_pot_raster[loc_affor] = int(ann_increment_tree_species * 500 * 1.2 * 1.25 *
+                                                           0.47*scaling * A_pixel_ha * 0.001)
 
 
             ### ensure that the nodata pixels in one of the layers are set back to no data
