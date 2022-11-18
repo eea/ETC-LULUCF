@@ -56,7 +56,7 @@ def define_affor_areas(settings, slope_max = 87.5):
         else:
             raise Exception
 
-    ## External mask (if some areas or not suitable for afforestation). 1 --> not suitable. 0 --> suitable
+    ## External mask (if some areas or not suitable for afforestation). 1 --> suitable. 0 --> not suitable
     External_mask_dir = settings.get('dict_afforestation_masking_layers').get('external_mask')
 
     if External_mask_dir is not None:
@@ -159,8 +159,10 @@ def define_affor_areas(settings, slope_max = 87.5):
 
             # Now filter on the locations with a suitable slope
             loc_affor_option = np.where((DEM_raster > slope_min) & (DEM_raster < slope_max)
-                                 & (CLC_IPCC_LUCAT_raster == value_LUCAT) & (N2K_raster == 255) &
-                                        (External_mask_raster == 0))
+                                 & (CLC_IPCC_LUCAT_raster == value_LUCAT) & (N2K_raster == 255))
+
+            # the external mask will add some additional areas even if not suitable
+            mask_raster[External_mask_raster == 1] = 1  # 1 is suitable
 
             ## set all the LU pixels to no masking initially
             mask_raster[loc_strata] = 0
@@ -226,7 +228,7 @@ def create_affor_potential(settings, affor_mask_array):
     else:
         if not settings.get('block_based_processing'):
             outdir_affor_pot = Path(Basefolder_affor_potential).joinpath('EE3A9')
-            outname_affor_pot =  f'{carbon_pool}_{settings.get("Scenario_name")}_{"EEA39"}.tif'
+            outname_affor_pot = f'{carbon_pool}_{settings.get("Scenario_name")}_{"EEA39"}.tif'
         else:
             outdir_affor_pot = Basefolder_affor_potential \
                 .joinpath(settings.get('NUTS3_info')['CNTR_CODE']).as_posix()
@@ -365,7 +367,7 @@ def create_affor_potential(settings, affor_mask_array):
                     kg_to_ton = 1000
                     """
                     #divide by 1000 to convert to tonC/hayr
-                    affor_yrly_pot_raster[loc_affor] = int(ann_increment_tree_species * 500 * 1.2 * 1.25 *
+                    affor_yrly_pot_raster[loc_affor] = int(ann_increment_tree_species * 500 * 1.2 * 0.25 *
                                                            0.47*scaling * A_pixel_ha * 0.001)
 
 
@@ -536,12 +538,14 @@ def create_metadata_description_afforestation(settings: dict, extent: str = 'EEA
 
 def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
                         settings: dict, stats_type: list = ['mean', 'count'], calc_BGB:bool=True
-                            , RTS_ratio:float = 0.25) -> pd.DataFrame:
+                            , RTS_ratio:float = 0.25, correct_low_prod_areas:bool = False) -> pd.DataFrame:
     """
     :param raster_dir: the directory of the raster on which the stats should be calculated
     :param spatial_layer: the geospatial layer that will be used to determine the areas for aggregation
     :param settings: dictionary with some settings that are needed to do the aggregation
     :param stats_type: indicate the type of statistics should be derived from the raster
+    :param correct_low_prod_areas: if true for areas with lower production (colder climates) a correction
+    factor will be applied
     :return: dataframe with the calculated stats
     """
 
@@ -573,8 +577,16 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
                                                       f'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
     lst_df_stats_NUTS = []
 
+    ## also take into account the percentage that should be reforest for the total increase calculation
+    if settings.get('run_NUTS_specific_scenario'):  #otherwise use default factors
+        dict_perc_reforest_info = get_factors_from_NUTS(settings, settings.get('afforestation_scenario')
+                                                    , 'Perc_reforest', id_LUT_carbon_pool='afforestation')
+    else:
+        dict_perc_reforest_info = settings.get('afforestation_scenario')
+
     # ## Load the specific defined parameters (at EU or NUTS scale) used to calculate the potential
     # factor_scenario = settings.get('afforestation_scenario')
+
 
     for FLU_class in df_FLU_mapping['IPCC_landuse_id'].unique():
         raster_values_FLU_filter = np.copy(raster_values)
@@ -583,9 +595,19 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
                             nodata=no_data, stats=stats_type)
         df_stats = pd.DataFrame.from_dict(stats)
         df_stats.columns = [f'{settings.get("carbon_pool")}_mean_yrly', 'nr_pixels']
-        ## add the outcome to the proper scale
-        df_stats[f'{settings.get("carbon_pool")}_mean_yrly'] = df_stats[f'{settings.get("carbon_pool")}_mean_yrly']/scaling
+        if correct_low_prod_areas:
+            ## only apply this factor for Scandinavia
+            if spatial_layer.NUTS_ID[0:2] in ['NO', 'FI', 'SE']:
+                df_stats[f'{settings.get("carbon_pool")}_mean_yrly'] = (df_stats[f'{settings.get("carbon_pool")}_mean_yrly']/scaling) * 0.5
+
+            else:
+                df_stats[f'{settings.get("carbon_pool")}_mean_yrly'] = df_stats[f'{settings.get("carbon_pool")}_mean_yrly']/scaling
+
+        else:
+            ## add the outcome to the proper scale
+            df_stats[f'{settings.get("carbon_pool")}_mean_yrly'] = df_stats[f'{settings.get("carbon_pool")}_mean_yrly']/scaling
         df_stats = df_stats.round(2)
+
         # derive the IPCC_cat for which the stats are calculated
         IPCC_cat = df_FLU_mapping.loc[df_FLU_mapping['IPCC_landuse_id'] == FLU_class] \
             ['IPCC_landuse_name'].values[0]
@@ -601,13 +623,19 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
         ## calculate now the total potential of carbon increase at the year based on the difference
         # between the potential year and the baseline year
         nr_years_future = int(year_potential - year_baseline)
+
+        ## now calculat the increase based on the percentage to reforest
+        df_stats['nr_pixels'] = df_stats['nr_pixels'] * dict_perc_reforest_info.get(IPCC_cat).get('Perc_reforest')
+
         if value_ABG_NUTS != no_data:
-            df_stats[f'{settings.get("carbon_pool")}_mean_{str(year_potential)}'] = df_stats[f'{settings.get("carbon_pool")}' \
-                                                                                        f'_mean_yrly']*nr_years_future
-            df_stats[f'BGB_biomass_mean_{str(year_potential)}'] = df_stats['BGB_biomass_mean_yrly'] * nr_years_future
+            df_stats[f'{settings.get("carbon_pool")}_total_{str(year_potential)}'] = df_stats[f'{settings.get("carbon_pool")}' \
+                                                                                        f'_mean_yrly']*nr_years_future * \
+                                                                                    df_stats['nr_pixels'].values[0]
+            df_stats[f'BGB_biomass_total_{str(year_potential)}'] = df_stats['BGB_biomass_mean_yrly'] * nr_years_future * \
+                                                                    df_stats['nr_pixels'].values[0]
         else:
-            df_stats[f'{settings.get("carbon_pool")}_mean_{str(year_potential)}'] = no_data
-            df_stats[f'BGB_biomass_mean_{str(year_potential)}'] = no_data
+            df_stats[f'{settings.get("carbon_pool")}_total_{str(year_potential)}'] = no_data
+            df_stats[f'BGB_biomass_total_{str(year_potential)}'] = no_data
 
 
 
@@ -640,6 +668,10 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
 
         df_stats['Tree_species_factor'] = dict_Tree_species_factors_info.get(IPCC_cat).get('Tree_species')
         df_stats['Tree_species_src'] = dict_Tree_species_factors_info.get(IPCC_cat).get('input_source')
+
+        df_stats['perc_reforest'] = dict_perc_reforest_info.get(IPCC_cat).get('Perc_reforest')
+        df_stats['perc_reforest_src'] = dict_perc_reforest_info.get(IPCC_cat).get('input_source')
+
 
         RCP_scenario = settings.get('afforestation_scenario').get(IPCC_cat).get('RCP')
         Year_potential = settings.get('afforestation_scenario').get(IPCC_cat).get('Year_potential')
