@@ -980,21 +980,24 @@ def calc_weighted_average_NUTS(df_stats_NUTS_small: pd.DataFrame, NUTS_layer: gp
             if df_NUTS3_matched_filter.empty:
                 continue
 
-            df_NUTS3_matched_filter = df_NUTS3_matched_filter.dropna()
+            df_NUTS3_matched_filter = df_NUTS3_matched_filter.fillna(0)
             tot_pixel = df_NUTS3_matched_filter['nr_pixels'].sum()
             df_NUTS3_matched_filter['weight'] = df_NUTS3_matched_filter['nr_pixels']/ tot_pixel
             ## now define the columns for which the weighted average should be taken
             columns_df = list(df_NUTS3_matched_filter.columns.values)
             ## only the columns for which the mean is taken will be used for the weighted average
-            columns_df_filtered = [item for item in columns_df if 'mean' in item]
+            columns_df_filtered = [item for item in columns_df if 'mean' in item or 'total' in item]
 
-            lst_mean_value_NUTS_region = []
+            lst_value_big_NUTS_region = []
             for column in columns_df_filtered:
-                mean_value_NUTS_region = np.round((df_NUTS3_matched_filter['weight']
-                                                   * df_NUTS3_matched_filter[column]).mean(),2)
-                lst_mean_value_NUTS_region.append(mean_value_NUTS_region)
+                if 'mean' in column:
+                    value_NUTS_region = (df_NUTS3_matched_filter.loc[df_NUTS3_matched_filter[column] != 0]['weight']
+                                                       * df_NUTS3_matched_filter[column]).mean()
+                else:
+                    value_NUTS_region = df_NUTS3_matched_filter[column].sum()
+                lst_value_big_NUTS_region.append(value_NUTS_region)
 
-            df_stats_NUTS_region = pd.DataFrame(lst_mean_value_NUTS_region).T
+            df_stats_NUTS_region = pd.DataFrame(lst_value_big_NUTS_region).T
             df_stats_NUTS_region.columns = columns_df_filtered
             df_stats_NUTS_region['nr_pixels'] = [tot_pixel]
             df_stats_NUTS_region['IPCC_cat'] = [IPCC_cat]
