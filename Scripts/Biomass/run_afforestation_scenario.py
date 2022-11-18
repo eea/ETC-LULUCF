@@ -130,7 +130,7 @@ def afforestation_LUT_block_proc(settings: dict):
         if settings.get('add_stats_NUTS_level') is not None:
 
             df_stats_NUTS = calc_stats_biomass_NUTS(os.path.join(outfolder, outname_scenario)
-                                                , NUTS3_region,settings)
+                                                , NUTS3_region,settings, correct_low_prod_areas=True)
             lst_NUTS_stats.append(df_stats_NUTS)
 
     if settings.get('add_stats_NUTS_level') is not None:
@@ -233,20 +233,20 @@ if __name__ == '__main__':
     4: Perc_reforest: The percentage of grassland/cropland that should be afforested
     5: Year_potential: The year for which the carbon potential calculation should be done
     """
-    Year_potential = 2035
+    Year_potential = 2065
     dict_default_afforestation_factors = {
-        'Cropland': {'Slope': 5,
+        'Cropland': {'Slope': 15,
                      'RCP': 'rcp45',
                      'Tree_prob': 70,
                      'Tree_species': 'Quercus_robur',
-                     'Perc_reforest': 50,
+                     'Perc_reforest': 10,
                      'Year_potential': Year_potential,
                      'input_source': 'EEA39'},
-        'Grassland': {'Slope': 5,
+        'Grassland': {'Slope': 15,
                       'RCP': 'rcp45',
                       'Tree_prob': 70,
                       'Tree_species': 'Quercus_robur',
-                      'Perc_reforest': 50,
+                      'Perc_reforest': 10,
                       'Year_potential': Year_potential,
                       'input_source': 'EEA39'}
     }
@@ -300,7 +300,7 @@ if __name__ == '__main__':
                 'afforestation_scenario': dict_default_afforestation_factors,
                 'dict_afforestation_masking_layers': dict_afforestation_masking_layers,
                 'LUT_folder': Biom_LUT_folder,
-                'commit_id': '0cdba7dd4ba63633e5602448a7b1f6723a430737'}
+                'commit_id': '32900356feeb63a79e204c0158e8e9b6d4e630ae'}
 
     main_afforestation(settings)
 
