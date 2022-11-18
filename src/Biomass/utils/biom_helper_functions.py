@@ -680,6 +680,10 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
 
 
         df_stats['geometry'] = [spatial_layer.geometry]
+
+        ## set nan to 0
+        df_stats = df_stats.fillna(0)
+
         lst_df_stats_NUTS.append(df_stats)
 
     return pd.concat(lst_df_stats_NUTS)
