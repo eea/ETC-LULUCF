@@ -340,7 +340,9 @@ def create_affor_potential(settings, affor_mask_array):
                         raise Exception(f'Problem with loading tree species prob layer for '
                                         f'{settings.get("NUTS3_info").NUTS_ID}')
 
-                    Tree_prob_raster, _ = open_raster_from_window(EU4Trees_prob_select[0], bounds)
+                    Tree_prob_raster, meta_tree_prob = open_raster_from_window(EU4Trees_prob_select[0], bounds)
+
+                    no_data_tree_prob =  meta_tree_prob.get('nodata')
 
                     ## load the way the CLC layer is translated to IPCC LUCAT
                     df_factor_IPCC_factors = pd.read_csv(os.path.join(settings.get('Basefolder_output'),
@@ -354,7 +356,7 @@ def create_affor_potential(settings, affor_mask_array):
 
                     #now find the location on which can be afforested (based on the mask) and the LUCAT is present
                     loc_affor = np.where((affor_mask_array == 1) & (CLC_IPCC_LUCAT_raster == value_LUCAT) &
-                                         (Tree_prob_raster > (tree_prob * 10)))
+                                         ((Tree_prob_raster > (tree_prob * 10)) & (Tree_prob_raster < no_data_tree_prob)))
 
                     ## The actual potential calculation can now be computed based on a formula as follows:
                     """
@@ -371,8 +373,10 @@ def create_affor_potential(settings, affor_mask_array):
                                                            0.47*scaling * A_pixel_ha * 0.001)
 
 
+
             ### ensure that the nodata pixels in one of the layers are set back to no data
             affor_yrly_pot_raster[CLC_IPCC_LUCAT_raster == no_data_IPCC_LUCAT] = 65535
+
 
             write_raster(np.expand_dims(affor_yrly_pot_raster,0),meta_raster,transform_raster,Path(outdir_affor_pot)
                          , outname_affor_pot)
@@ -625,7 +629,7 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
         nr_years_future = int(year_potential - year_baseline)
 
         ## now calculat the increase based on the percentage to reforest
-        df_stats['nr_pixels'] = df_stats['nr_pixels'] * dict_perc_reforest_info.get(IPCC_cat).get('Perc_reforest')
+        df_stats['nr_pixels'] = df_stats['nr_pixels'] * (dict_perc_reforest_info.get(IPCC_cat).get('Perc_reforest')/100)
 
         if value_ABG_NUTS != no_data:
             df_stats[f'{settings.get("carbon_pool")}_total_{str(year_potential)}'] = df_stats[f'{settings.get("carbon_pool")}' \
