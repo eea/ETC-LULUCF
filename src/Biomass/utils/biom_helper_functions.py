@@ -360,16 +360,16 @@ def create_affor_potential(settings, affor_mask_array):
 
                     ## The actual potential calculation can now be computed based on a formula as follows:
                     """
-                    annual CO2 sink = Volume increment x Density x BEFx Rootoshoot x CF x kg_to_ton
+                    annual CO2 sink = Volume increment x Density x BEFx (1+Rootoshoot) x CF x kg_to_ton
                     Where:
                     density = 500
                     BEF= 1.2
-                    R= 1.25
+                    R= 0.25
                     CF= 0.47
                     kg_to_ton = 1000
                     """
                     #divide by 1000 to convert to tonC/hayr
-                    affor_yrly_pot_raster[loc_affor] = int(ann_increment_tree_species * 500 * 1.2 * 0.25 *
+                    affor_yrly_pot_raster[loc_affor] = int(ann_increment_tree_species * 500 * 1.2 * (1 + 0.25) *
                                                            0.47*scaling * A_pixel_ha * 0.001)
 
 
