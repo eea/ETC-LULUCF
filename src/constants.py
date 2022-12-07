@@ -1,5 +1,6 @@
 """
-Constant settings that can be recycled among most of the scripts for Carbon seq mapping
+Constant settings that can be recycled among most of the scripts for Carbon seq mapping for different pools
+and management options.
 """
 
 import os
@@ -7,22 +8,30 @@ import geopandas as gpd
 
 ### Some default settings
 
+# the network drive name on which all the data is stored
 dir_signature = 'L:'
 overwrite = False
+# folder which will be used for the output and in which all the LUT are stored
 Basefolder_strata = os.path.join(dir_signature, 'etc', 'lulucf', 'strata')
 
 
 Basefolder_input_data = os.path.join(dir_signature,'etc','lulucf','input_data')
 CLC_ACC_folder = os.path.join(dir_signature, 'input_data', 'general', 'CLCACC')
-type_method = 'LUT' ### define the kind of method that shoudl be used to define the carbon seq basline and potential
+### define the Tier type of method. Just one option is available right now: 'LUT'
+type_method = 'LUT'
 
+## the location of the map that identifies the boundaries of all NUTS regions
 shp_extent_map = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','EEA39_extent_noDOM.shp'))
 
 
+
+## some paths towards ready-to-use input dataset
 path_IPCC_climate_resampled = os.path.join(Basefolder_input_data,'IPCC', 'IPCC_data_converted', 'climate_final_map',
                                            'ipcc_climate_zone_100m_EPSG3035_EEA39.tif')
 path_IPCC_soil_resampled = os.path.join(Basefolder_input_data,'IPCC', 'IPCC_data_converted', 'soil_final_map',
                                         'ipcc_soil_type_100m_EPSG3035_EEA39.tif')
+
+path_ecological_zones = os.path.join(Basefolder_input_data, 'IPCC', 'IPCC_data_converted', 'eco_zone_EPSG3035.gpkg')
 
 
 #LUT CLC IPCC MAPPING
@@ -47,8 +56,8 @@ CLC_IPCC_mapping = {
                    'ID_class': 6}}
 
 
-# LUT management activaties and carbon pool
+# LUT management activities and carbon pool
 
-dict_C_pool_mng_options = {'afforestation': 'ABGbiomass',
+dict_C_pool_mng_options = {'afforestation': 'LB', # LB stands for living biomass (above + below ground)
                            'cropland_management': 'SOC',
                            'grassland_management': 'SOC'}
