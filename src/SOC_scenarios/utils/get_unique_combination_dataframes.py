@@ -32,7 +32,8 @@ def combine_dataframes(df1, df2):
 LUT_SOCREF = False
 LUT_FLU = False
 LUT_FMG = False
-LUT_FI = True
+LUT_FI = False
+LUT_RTS = True
 IPCC_land_use_class = 'Grassland'
 
 if LUT_SOCREF:
@@ -68,3 +69,14 @@ if LUT_FI:
     outname = rf'IPCC_LUT_factors_FI_tmp_{IPCC_land_use_class}.xlsx'
     df_combined = combine_dataframes(df_FMG, df_climate)
     df_combined.to_excel(os.path.join(outdir,outname),index=False)
+
+
+if LUT_RTS:
+    df1 = pd.read_csv(r"L:\etc\lulucf\strata\NUTS_LUT_afforestation_scenario\Ecological_zones_options.csv")
+    df2 = pd.read_csv(r"L:\etc\lulucf\strata\NUTS_LUT_afforestation_scenario\EU4_trees_options.csv")
+    df2 = pd.read_csv(r"L:\etc\lulucf\strata\NUTS_LUT_afforestation_scenario\EU4_trees_options.csv")
+    outdir = r'L:\etc\lulucf\strata\NUTS_LUT_afforestation_scenario'
+    outname = 'IPCC_LUT_RTS_factors.csv'
+    df_combined = combine_dataframes(df1, df2)
+    df_combined.to_excel(os.path.join(outdir,outname),index=False)
+
