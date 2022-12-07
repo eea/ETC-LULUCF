@@ -129,7 +129,7 @@ def SOC_strat_IPCC_block_proc(settings: dict):
             gpd_NUTS_stats = gpd.GeoDataFrame(df_stats_NUTS_final, geometry=df_stats_NUTS_final.geometry)
 
             ## add additional attribute tables that enable to interpret the results
-            gpd_NUTS_stats = add_atrributes_stats(gpd_NUTS_stats, level_NUTS_focus=3)
+            gpd_NUTS_stats = add_atrributes_stats(gpd_NUTS_stats, level_NUTS_focus=None)
 
 
             ## write out the result
@@ -397,7 +397,7 @@ if __name__ == '__main__':
                 'path_IPCC_soil_resampled': path_IPCC_soil_resampled,
                 'add_stats_NUTS_level': add_stats_NUTS_level,
                 'carbon_pool': 'SOC',
-                'commit_id': 'a06843d97f3d2de96e461570f8e1c537dca9579a'}
+                'commit_id': '32900356feeb63a79e204c0158e8e9b6d4e630ae'}
 
     main_stratification(settings)
 
