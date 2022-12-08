@@ -378,6 +378,8 @@ if __name__ == '__main__':
 
     scaling = 100 # the scaling that is used on the factors to avoid working in float
 
+    shp_extent_map = gpd.read_file(shp_extent_map)
+
     settings = {'year_baseline': 2018,
                 'dir_signature': dir_signature,
                 'overwrite': overwrite,
