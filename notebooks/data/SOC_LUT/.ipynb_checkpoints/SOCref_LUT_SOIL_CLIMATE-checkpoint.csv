@@ -1,0 +1,97 @@
+﻿IPCC_soil_id;IPCC_climate_id;IPCC_soil_name;IPCC_climate_name;SOC_REF (ton*C/ha);SOC_REF_uncertainty(%)
+1;1;Organic;Warm Temperate Moist;None;None
+1;2;Organic;Warm Temperate Dry;None;None
+1;3;Organic;Cool Temperate Moist;None;None
+1;4;Organic;Cool Temperate Dry;None;None
+1;5;Organic;Polar Moist;None;None
+1;6;Organic;Polar Dry;None;None
+1;7;Organic;Boreal Moist;None;None
+1;8;Organic;Boreal Dry;None;None
+1;9;Organic;Tropical Montane;None;None
+1;10;Organic;Tropical Wet;None;None
+1;11;Organic;Tropical Moist;None;None
+1;12;Organic;Tropical Dry;None;None
+2;1;Sandy Soils;Warm Temperate Moist;36;23
+2;2;Sandy Soils;Warm Temperate Dry;10;5
+2;3;Sandy Soils;Cool Temperate Moist;51;13
+2;4;Sandy Soils;Cool Temperate Dry;13;33
+2;5;Sandy Soils;Polar Moist;27;67
+2;6;Sandy Soils;Polar Dry;27;67
+2;7;Sandy Soils;Boreal Moist;10;90
+2;8;Sandy Soils;Boreal Dry;10;90
+2;9;Sandy Soils;Tropical Montane;52;34
+2;10;Sandy Soils;Tropical Wet;46;20
+2;11;Sandy Soils;Tropical Moist;27;12
+2;12;Sandy Soils;Tropical Dry;9;9
+3;1;Wetland Soils;Warm Temperate Moist;135;28
+3;2;Wetland Soils;Warm Temperate Dry;74;17
+3;3;Wetland Soils;Cool Temperate Moist;128;13
+3;4;Wetland Soils;Cool Temperate Dry;87;90
+3;5;Wetland Soils;Polar Moist;None;None
+3;6;Wetland Soils;Polar Dry;None;None
+3;7;Wetland Soils;Boreal Moist;116;65
+3;8;Wetland Soils;Boreal Dry;116;65
+3;9;Wetland Soils;Tropical Montane;82;50
+3;10;Wetland Soils;Tropical Wet;49;19
+3;11;Wetland Soils;Tropical Moist;68;17
+3;12;Wetland Soils;Tropical Dry;22;17
+4;1;Volcanic Soils;Warm Temperate Moist;138;12
+4;2;Volcanic Soils;Warm Temperate Dry;84;65
+4;3;Volcanic Soils;Cool Temperate Moist;136;14
+4;4;Volcanic Soils;Cool Temperate Dry;20;90
+4;5;Volcanic Soils;Polar Moist;None;None
+4;6;Volcanic Soils;Polar Dry;None;None
+4;7;Volcanic Soils;Boreal Moist;20;90
+4;8;Volcanic Soils;Boreal Dry;20;90
+4;9;Volcanic Soils;Tropical Montane;96;31
+4;10;Volcanic Soils;Tropical Wet;77;27
+4;11;Volcanic Soils;Tropical Moist;70;90
+4;12;Volcanic Soils;Tropical Dry;50;90
+5;1;Spodic Soils;Warm Temperate Moist;143;30
+5;2;Spodic Soils;Warm Temperate Dry;None;None
+5;3;Spodic Soils;Cool Temperate Moist;128;14
+5;4;Spodic Soils;Cool Temperate Dry;None;None
+5;5;Spodic Soils;Polar Moist;None;None
+5;6;Spodic Soils;Polar Dry;None;None
+5;7;Spodic Soils;Boreal Moist;117;90
+5;8;Spodic Soils;Boreal Dry;117;90
+5;9;Spodic Soils;Tropical Montane;None;None
+5;10;Spodic Soils;Tropical Wet;None;None
+5;11;Spodic Soils;Tropical Moist;None;None
+5;12;Spodic Soils;Tropical Dry;None;None
+6;1;High Activity Clay Soils;Warm Temperate Moist;64;5
+6;2;High Activity Clay Soils;Warm Temperate Dry;24;5
+6;3;High Activity Clay Soils;Cool Temperate Moist;81;5
+6;4;High Activity Clay Soils;Cool Temperate Dry;43;8
+6;5;High Activity Clay Soils;Polar Moist;59;41
+6;6;High Activity Clay Soils;Polar Dry;59;41
+6;7;High Activity Clay Soils;Boreal Moist;63;18
+6;8;High Activity Clay Soils;Boreal Dry;63;18
+6;9;High Activity Clay Soils;Tropical Montane;51;10
+6;10;High Activity Clay Soils;Tropical Wet;60;8
+6;11;High Activity Clay Soils;Tropical Moist;40;7
+6;12;High Activity Clay Soils;Tropical Dry;21;5
+7;1;Low Activity Clay Soils;Warm Temperate Moist;55;8
+7;2;Low Activity Clay Soils;Warm Temperate Dry;19;16
+7;3;Low Activity Clay Soils;Cool Temperate Moist;76;51
+7;4;Low Activity Clay Soils;Cool Temperate Dry;33;90
+7;5;Low Activity Clay Soils;Polar Moist;None;None
+7;6;Low Activity Clay Soils;Polar Dry;None;None
+7;7;Low Activity Clay Soils;Boreal Moist;None;None
+7;8;Low Activity Clay Soils;Boreal Dry;None;None
+7;9;Low Activity Clay Soils;Tropical Montane;44;11
+7;10;Low Activity Clay Soils;Tropical Wet;52;6
+7;11;Low Activity Clay Soils;Tropical Moist;38;5
+7;12;Low Activity Clay Soils;Tropical Dry;19;10
+8;1;Other Areas;Warm Temperate Moist;None;None
+8;2;Other Areas;Warm Temperate Dry;None;None
+8;3;Other Areas;Cool Temperate Moist;None;None
+8;4;Other Areas;Cool Temperate Dry;None;None
+8;5;Other Areas;Polar Moist;None;None
+8;6;Other Areas;Polar Dry;None;None
+8;7;Other Areas;Boreal Moist;None;None
+8;8;Other Areas;Boreal Dry;None;None
+8;9;Other Areas;Tropical Montane;None;None
+8;10;Other Areas;Tropical Wet;None;None
+8;11;Other Areas;Tropical Moist;None;None
+8;12;Other Areas;Tropical Dry;None;None
