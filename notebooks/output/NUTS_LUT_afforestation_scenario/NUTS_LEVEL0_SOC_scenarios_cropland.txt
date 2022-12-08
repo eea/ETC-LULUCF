@@ -1,0 +1,38 @@
+NUTS_LEVEL0_ID	FMG	FI
+FR	1	1
+HR	1	1
+HU		1
+AL	1	1
+AT	1	1
+BE	1	1
+BG	1	1
+CH	1	1
+CY	1	1
+CZ	1	1
+DE	1	1
+DK	1	1
+EE	1	1
+EL	2	2
+IE	2	2
+ES	2	2
+FI	2	2
+IS	2	2
+PT	2	2
+RO		2
+RS		2
+SE		2
+SI		2
+SK		3
+TR		3
+UK		3
+NO		3
+IT		
+LI		
+LT		
+LU		
+LV		
+ME		
+MK		
+MT		
+NL		
+PL		
