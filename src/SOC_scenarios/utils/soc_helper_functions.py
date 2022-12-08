@@ -120,7 +120,7 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
 
     ### load default parameters
     SOC_LUT_folder = Path(settings.get('SOC_LUT_folder')).as_posix()
-    year_focus = settings.get('year_focus')
+    year_baseline = settings.get('year_baseline')
     CLC_ACC_folder_original = settings.get('CLC_ACC_folder')
     CLC_ACC_folder_Country = Path(settings.get('Basefolder_input_data')).joinpath('CLC_ACC')
     overwrite = settings.get('overwrite')
@@ -128,10 +128,10 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
     Basefolder_output_data = settings.get('Basefolder_output')
 
     if settings.get('Country') is None or settings.get('block_based_processing'):
-        CLC_ACC_file = [item for item in glob.glob(os.path.join(CLC_ACC_folder_original, '*.tif')) if 'CLC{}'.format(str(year_focus)) in Path(item).stem][0]
+        CLC_ACC_file = [item for item in glob.glob(os.path.join(CLC_ACC_folder_original, '*.tif')) if 'CLC{}'.format(str(year_baseline)) in Path(item).stem][0]
     else:
         CLC_ACC_file = [item for item in glob.glob(os.path.join(CLC_ACC_folder_Country, settings.get('Country'), '*.tif'))
-                        if 'CLC{}'.format(str(year_focus)) in Path(item).stem][0]
+                        if 'CLC{}'.format(str(year_baseline)) in Path(item).stem][0]
 
     ### open LUT FLU mapping
     df_CLC_FLU_conversion = pd.read_csv(os.path.join(SOC_LUT_folder, 'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
@@ -370,7 +370,7 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
         outdir_IPCC_LUCAT = Path(Basefolder_strata_output).joinpath('CLC_ACC_IPCC')
     else:
         outdir_IPCC_LUCAT = Path(Basefolder_strata_output).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
-    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_focus"))))
+    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_baseline"))))
     df_CLC_FLU_conversion = pd.read_csv(os.path.join(Basefolder_LUT, 'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
 
     ### Define the output directory where the result will be stored
@@ -621,14 +621,15 @@ def create_SOC_scenario_layer(settings):
 
 
 
-def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_factor: str) -> dict:
-    folder = settings.get('SOC_NUTS_factors_folder')
+def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_factor: str,
+                          id_LUT_carbon_pool: str = 'SOC') -> dict:
+    folder = settings.get(f'{id_LUT_carbon_pool}_NUTS_factors_folder')
     NUTS_info = settings.get('NUTS3_info')
 
     dict_scenario = {}
     for crop in dict_default_scenario.keys():
-        file_dir_NUTS3 = os.path.join(folder, 'NUTS_LEVEL3_SOC_scenarios_{}.txt'.format(crop.lower()))
-        file_dir_NUTS0 = os.path.join(folder, 'NUTS_LEVEL0_SOC_scenarios_{}.txt'.format(crop.lower()))
+        file_dir_NUTS3 = os.path.join(folder, f'NUTS_LEVEL3_{id_LUT_carbon_pool}_scenarios_{crop.lower()}.txt')
+        file_dir_NUTS0 = os.path.join(folder, f'NUTS_LEVEL0_{id_LUT_carbon_pool}_scenarios_{crop.lower()}.txt')
 
         df_NUTS3 = pd.read_csv(file_dir_NUTS3, sep='\t')
         df_NUTS0 = pd.read_csv(file_dir_NUTS0, sep='\t')
@@ -645,10 +646,20 @@ def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_fact
                 dict_scenario.update({crop:{type_factor: dict_default_scenario.get(crop).get(type_factor),
                                             'input_source': 'EEA39'}})
             else:
-                dict_scenario.update({crop:{type_factor: int(factor_NUTS0),
+                ## check if can convert to integer:
+                try:
+                    factor_NUTS0 = int(factor_NUTS0)
+                except:
+                    factor_NUTS0 = factor_NUTS0
+                dict_scenario.update({crop:{type_factor: factor_NUTS0,
                                             'input_source': 'NUTS0'}})
         else:
-            dict_scenario.update({crop:{type_factor: int(factor_NUTS3),
+            ## check if can convert to integer:
+            try:
+                factor_NUTS3 = int(factor_NUTS3)
+            except:
+                factor_NUTS3 = factor_NUTS3
+            dict_scenario.update({crop:{type_factor: factor_NUTS3,
                                         'input_source': 'NUTS3'}})
 
     return dict_scenario
@@ -670,7 +681,7 @@ def write_raster(out_image,out_meta, out_transform, outdir, outname):
                 band_result = out_image[band,:,:]
                 dest.write_band(band+1, band_result)
 
-def downsize_raster(input_raster_file, overwrite):
+def downsize_raster(input_raster_file, overwrite, dtype):
     outfile = Path(input_raster_file).parent.joinpath(Path(input_raster_file).stem + '_downsized.tif').as_posix()
 
     if not os.path.exists(outfile) and not overwrite:
@@ -681,10 +692,26 @@ def downsize_raster(input_raster_file, overwrite):
             out_transform = file.transform
             nodata_value = file.nodata
 
-        downsized_raster = np.full(ref_raster.shape,255).astype(out_meta.get('dtype'))
-        downsized_raster[ref_raster != nodata_value] = ref_raster[ref_raster != nodata_value]
+        if dtype is None: ## by default uint8 dtype
+            downsized_raster = np.full(ref_raster.shape,255).astype(out_meta.get('dtype'))
+            downsized_raster[ref_raster != nodata_value] = ref_raster[ref_raster != nodata_value]
+            out_meta.update({'nodata': 255,
+                             'dtype': 'uint8'})
+        else:
+            if dtype == 'UInt8':
+                downsized_raster = np.full(ref_raster.shape,255).astype('uin8')
+                downsized_raster[ref_raster != nodata_value] = ref_raster[ref_raster != nodata_value]
+                out_meta.update({'nodata': 255,
+                                 'dtype': 'uint8'})
+            elif dtype == 'UInt16':
+                downsized_raster = np.full(ref_raster.shape,65535).astype('uint16')
+                downsized_raster[ref_raster != nodata_value] = ref_raster[ref_raster != nodata_value]
+                out_meta.update({'nodata': 65535,
+                                 'dtype': 'uint16'})
+            else:
+                raise ValueError('DTYPE NOT SUPPORTED!')
 
-        out_meta.update({'nodata': 255})
+
         write_raster(np.expand_dims(downsized_raster,0),out_meta,out_transform,Path(outfile).parent, Path(outfile).name)
         os.unlink(input_raster_file)
         ## give again the original name to the file
@@ -692,8 +719,8 @@ def downsize_raster(input_raster_file, overwrite):
 
 
 def resample_raster_to_ref(raster_files_to_clip, raster_file_ref, MS_focus, outdir, overwrite,
-                        outname, resample_method = 'near', resample_factor = 1, scale_factor = 1, resampling = False,
-                           ):
+                        outname, resample_method='near', resample_factor = 1, scale_factor = 1, resampling = False,
+                           dtype = None):
 
     for raster_file in raster_files_to_clip:
 
@@ -705,19 +732,22 @@ def resample_raster_to_ref(raster_files_to_clip, raster_file_ref, MS_focus, outd
         if os.path.exists(os.path.join(outdir, outname)):
             os.unlink(os.path.join(outdir, outname))
 
+        #know the original EPSG
+        epsg_from = osr.SpatialReference(wkt = gdal.Open(raster_file).GetProjection()).GetAttrValue('AUTHORITY',1)
+
         ds_reference = gdal.Open(raster_file_ref)
         ds_transform = ds_reference.GetGeoTransform()
         proj = osr.SpatialReference(wkt =ds_reference.GetProjection())
-        epsg = proj.GetAttrValue('AUTHORITY',1)
+        epsg_to = proj.GetAttrValue('AUTHORITY',1)
         upper_left_corner_x = ds_transform[0]
         upper_left_corner_y = ds_transform[3]
         lower_right_corner_x = upper_left_corner_x + (ds_reference.RasterXSize * ds_transform[1])
         lower_right_corner_y = upper_left_corner_y + (ds_reference.RasterYSize * ds_transform[-1])
         if resampling:
-            cmd_warp = f'gdalwarp --config GDAL_CACHEMAX 256 -co COMPRESS=LZW -s_srs epsg:{epsg} -t_srs epsg:{epsg} -te {str(upper_left_corner_x)} {str(lower_right_corner_y)} {str(lower_right_corner_x)} {str(upper_left_corner_y)}' \
+            cmd_warp = f'gdalwarp --config GDAL_CACHEMAX 256 -co COMPRESS=LZW -s_srs epsg:{epsg_from} -t_srs epsg:{epsg_to} -te {str(upper_left_corner_x)} {str(lower_right_corner_y)} {str(lower_right_corner_x)} {str(upper_left_corner_y)}' \
                        f' -tr {ds_transform[1]*resample_factor} {abs(ds_transform[-1])*resample_factor} -of GTiff {raster_file} {os.path.join(outdir, outname)} -r {resample_method}'
         else:
-            cmd_warp = f'gdalwarp -s_srs epsg:{epsg} -t_srs epsg:{epsg} -te {str(upper_left_corner_x)} {str(lower_right_corner_y)} {str(lower_right_corner_x)} {str(upper_left_corner_y)}' \
+            cmd_warp = f'gdalwarp -s_srs epsg:{epsg_from} -t_srs epsg:{epsg_to} -te {str(upper_left_corner_x)} {str(lower_right_corner_y)} {str(lower_right_corner_x)} {str(upper_left_corner_y)}' \
                        f'  -ts -of GTiff {raster_file} {os.path.join(outdir, outname)} -r {resample_method}'
 
         try:
@@ -731,7 +761,7 @@ def resample_raster_to_ref(raster_files_to_clip, raster_file_ref, MS_focus, outd
             os.rename(outname_tmp, os.path.join(outdir, outname))
 
         ### reduce the size of the raster because gdal is not that efficient
-        downsize_raster(os.path.join(outdir, outname), overwrite)
+        downsize_raster(os.path.join(outdir, outname), overwrite, dtype)
 
 
 
@@ -811,7 +841,7 @@ def rescale_raster(raster_file,outdir, rescale_factor):
     return os.path.join(outdir, outname)
 
 
-def add_atrributes_SOC_stats(spatial_layer: gpd, level_NUTS_focus = None, spatial_resolution: int = 100) -> gpd:
+def add_atrributes_stats(spatial_layer: gpd, level_NUTS_focus = None, spatial_resolution: int = 100) -> gpd:
     """
     Function that will insert some additional columns that could be used for the interpretation or analysis
     of the SOC stats.
@@ -856,7 +886,7 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
     else:
         outdir_IPCC_LUCAT = Path(settings.get('Basefolder_output')).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
 
-    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_focus"))))[0]
+    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_baseline"))))[0]
 
 
     FLU_raster, meta = open_raster_from_window(CLC_IPCC_LUCAT_dir, spatial_layer.geometry.bounds)
@@ -867,6 +897,7 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
     lst_df_stats_NUTS = []
 
     for FLU_class in df_FLU_mapping['IPCC_landuse_id'].unique():
+        LU_name = df_FLU_mapping.loc[df_FLU_mapping.IPCC_landuse_id == FLU_class]['IPCC_landuse_name'].values[0]
         raster_values_FLU_filter = np.copy(raster_values)
         raster_values_FLU_filter[np.where(FLU_raster != FLU_class)] = no_data
         stats = zonal_stats(spatial_layer.geometry, raster_values_FLU_filter, affine=affine,
@@ -899,7 +930,7 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
         df_stats['FI_factor'] = dict_FI_factors_info.get(IPCC_cat).get('FI')
         df_stats['FI_src'] = dict_FI_factors_info.get(IPCC_cat).get('input_source')
 
-        if settings.get('Fixed_factor_FLU'):
+        if settings.get('Fixed_factor_FLU') and LU_name == 'Cropland':
             if IPCC_cat in settings.get('Stock_change_scenario').keys():
                 df_stats['FLU_factor'] = settings.get('Stock_change_scenario').get('Cropland').get('FLU')
                 df_stats['FLU_src'] = 'EEA39'
@@ -949,12 +980,25 @@ def calc_weighted_average_NUTS(df_stats_NUTS_small: pd.DataFrame, NUTS_layer: gp
             if df_NUTS3_matched_filter.empty:
                 continue
 
-            df_NUTS3_matched_filter = df_NUTS3_matched_filter.dropna()
+            df_NUTS3_matched_filter = df_NUTS3_matched_filter.fillna(0)
             tot_pixel = df_NUTS3_matched_filter['nr_pixels'].sum()
             df_NUTS3_matched_filter['weight'] = df_NUTS3_matched_filter['nr_pixels']/ tot_pixel
-            mean_value_NUTS_region = np.round((df_NUTS3_matched_filter['weight']
-                                               * df_NUTS3_matched_filter['SOC_mean']).mean(),2)
-            df_stats_NUTS_region = pd.DataFrame([mean_value_NUTS_region], columns= ['SOC_mean'])
+            ## now define the columns for which the weighted average should be taken
+            columns_df = list(df_NUTS3_matched_filter.columns.values)
+            ## only the columns for which the mean is taken will be used for the weighted average
+            columns_df_filtered = [item for item in columns_df if 'mean' in item or 'total' in item]
+
+            lst_value_big_NUTS_region = []
+            for column in columns_df_filtered:
+                if 'mean' in column:
+                    value_NUTS_region = (df_NUTS3_matched_filter.loc[df_NUTS3_matched_filter[column] != 0]['weight']
+                                                       * df_NUTS3_matched_filter[column]).mean()
+                else:
+                    value_NUTS_region = df_NUTS3_matched_filter[column].sum()
+                lst_value_big_NUTS_region.append(value_NUTS_region)
+
+            df_stats_NUTS_region = pd.DataFrame(lst_value_big_NUTS_region).T
+            df_stats_NUTS_region.columns = columns_df_filtered
             df_stats_NUTS_region['nr_pixels'] = [tot_pixel]
             df_stats_NUTS_region['IPCC_cat'] = [IPCC_cat]
             df_stats_NUTS_region['NUTS_LEVEL'] = [str(level_focus)]
