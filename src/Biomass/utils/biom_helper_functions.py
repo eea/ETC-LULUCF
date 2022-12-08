@@ -152,8 +152,7 @@ def define_affor_areas(settings, slope_max = 87.5):
         ### Loop over the different considered IPCC land use categories (LUCAT)
         for LUCAT in factor_scenario.keys():
             ## load the way the CLC layer is translated to IPCC LUCAT
-            df_factor_IPCC_factors = pd.read_csv(os.path.join(settings.get('Basefolder_output'),
-                                                 'SOC_LUT',
+            df_factor_IPCC_factors = pd.read_csv(os.path.join(settings.get('SOC_LUT'),
                                                  f'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
             ## get the value that defines the specific IPCC LUCAT
             value_LUCAT = df_factor_IPCC_factors.loc[df_factor_IPCC_factors['IPCC_landuse_name'] == LUCAT]\
@@ -359,8 +358,7 @@ def create_affor_potential(settings, affor_mask_array):
                     no_data_tree_prob =  meta_tree_prob.get('nodata')
 
                     ## load the way the CLC layer is translated to IPCC LUCAT
-                    df_factor_IPCC_factors = pd.read_csv(os.path.join(settings.get('Basefolder_output'),
-                                                                      'SOC_LUT',
+                    df_factor_IPCC_factors = pd.read_csv(os.path.join(settings.get('SOC_LUT'),
                                                                       f'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
 
                     ## based on the LUT, load the yearly volumen increment of the tree species
@@ -594,8 +592,7 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
     FLU_raster, meta = open_raster_from_window(CLC_IPCC_LUCAT_dir, spatial_layer.geometry.bounds)
 
     ## load the way the CLC layer is translated to IPCC LUCAT
-    df_FLU_mapping = pd.read_csv(os.path.join(settings.get('Basefolder_output'),
-                                                      'SOC_LUT',
+    df_FLU_mapping = pd.read_csv(os.path.join(settings.get('SOC_LUT'),
                                                       f'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
     lst_df_stats_NUTS = []
 
