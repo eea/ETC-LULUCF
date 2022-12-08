@@ -311,6 +311,11 @@ if __name__ == '__main__':
     4: High with manure
     """
 
+    ##### FLU Grassland options:
+    """
+    5: All grassland
+    """
+
     ##### FMG Grassland options:
     """
     1: Nominally managed 
@@ -332,7 +337,7 @@ if __name__ == '__main__':
 
     #### use some default factors for EU LEVEL if no NUTS specific factors are provided
     dict_default_stock_change_factors = {
-        'Cropland': {'FLU': 1, 'FMG': 1, 'FI': 1,
+        'Grassland': {'FLU': 5, 'FMG': 1, 'FI': 1,
                      'input_source': 'EEA39'}
         }
     #'Grassland': {'FMG': 1, 'FI': 1}
@@ -344,7 +349,7 @@ if __name__ == '__main__':
     block_based_processing = True
 
     ### extension that is used to distinguish different scenario runs
-    scenario_name = 'Scenario_1_baseline'
+    scenario_name = 'Scenario_1_baseline_grassland'
 
     ### Country_running
     Country = None #set to None if want to run entire EEA39 extent
