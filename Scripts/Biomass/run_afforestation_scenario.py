@@ -201,9 +201,6 @@ if __name__ == '__main__':
 
     ### Import the default parameters
     from constants import *
-    ## the folder in which the IPCC LUT tables are provided to use in this approach
-    Biom_LUT_folder = os.path.join(Basefolder_strata, 'biomass_LUT')
-    os.makedirs(Biom_LUT_folder, exist_ok=True)
 
     ### Define if the results should be created by block-based
     ### processing, meaning only the window for the AOI will
@@ -213,6 +210,9 @@ if __name__ == '__main__':
     ### Country_running
     Country = None #set to None if want to run entire EEA39 extent
     shp_NUTS_borders = gpd.read_file(os.path.join(dir_signature, 'etc', 'lulucf', 'AOI', 'NUTS_RG_20M_2021_3035.shp'))
+
+    ## Load the basefolder of the EU4Trees dataset
+    EU4Trees_base = os.path.join(Basefolder_input_data, 'EU-Trees4F', 'ens_sdms', 'prob', 'resampled')
 
 
     ## define which type of management you want to apply for the future potential carbon seq scenarion
@@ -287,7 +287,7 @@ if __name__ == '__main__':
 
     scaling = 100 # the scaling that is used on the factors to avoid working in float
 
-
+    shp_extent_map = gpd.read_file(shp_extent_map)
     ## Put all the defined settings in a single dictionary such that it can be easily loaded in the afforestation
     ##scenario workflow
     settings = {'year_baseline': 2018,
@@ -313,8 +313,9 @@ if __name__ == '__main__':
                 'mng_option': mng_option,
                 'afforestation_scenario': dict_default_afforestation_factors,
                 'dict_afforestation_masking_layers': dict_afforestation_masking_layers,
-                'LUT_folder': Biom_LUT_folder,
-                'commit_id': '4d15ab767741e26db9546a972b5bb60bcb38380b'}
+                'SOC_LUT': os.path.join(Basefolder_strata, 'SOC_LUT'),
+                'folder_EU4Trees': EU4Trees_base,
+                'commit_id': 'cb72cc9159d438f3e235e3e9c10e60dd2853f95c'}
 
     __main__(settings)
 
