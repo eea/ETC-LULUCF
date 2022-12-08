@@ -224,8 +224,7 @@ def create_affor_potential(settings, affor_mask_array):
     ### First load the needed layers
     Basefolder_affor_potential = Path(settings.get('Basefolder_output')).joinpath(f'{carbon_pool}_scenario')
     Basefolder_affor_potential.mkdir(exist_ok=True)
-    Basefolder_input_data = settings.get('Basefolder_input_data')
-    Files_EUtrees4F_prob = glob.glob(os.path.join(Basefolder_input_data, 'EU-Trees4F', 'ens_sdms', 'prob', 'resampled', '*tif'))
+    Files_EUtrees4F_prob = glob.glob(os.path.join(settings.get('folder_EU4Trees'), '*tif'))
     ## CLC_ACC raster
     file_IPCC_LU = settings.get('file_IPCC_LU')
 
