@@ -361,8 +361,10 @@ def create_affor_potential(settings, affor_mask_array):
                                                                       f'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
 
                     ## based on the LUT, load the yearly volumen increment of the tree species
+                    #TODO now the max annual increment is taken to give the potential --> should be adjusted if more
+                    # data become available on the mean or median
                     ann_increment_tree_species = df_trees_biom_increment.loc[df_trees_biom_increment
-                                                                                 .Tree_species == tree_species]['Ann_increment'].values[0]
+                                                                                 .Tree_species == tree_species]['Ann_increment_max'].values[0]
                     ## get the value assigned to the specific IPCC LUCAT
                     value_LUCAT = df_factor_IPCC_factors.loc[df_factor_IPCC_factors['IPCC_landuse_name'] == LUCAT] \
                         ['IPCC_landuse_id'].values[0]
@@ -677,7 +679,7 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
         df_stats['Slope_factor'] = dict_Slope_factors_info.get(IPCC_cat).get('Slope')
         df_stats['Slope_src'] = dict_Slope_factors_info.get(IPCC_cat).get('input_source')
 
-        df_stats['Tree_prob'] = dict_Tree_prob_factors_info.get(IPCC_cat).get('input_source')
+        df_stats['Tree_prob'] = dict_Tree_prob_factors_info.get(IPCC_cat).get('Tree_prob')
         df_stats['Tree_prob_src'] = dict_Tree_prob_factors_info.get(IPCC_cat).get('input_source')
 
         df_stats['Tree_species_factor'] = dict_Tree_species_factors_info.get(IPCC_cat).get('Tree_species')
