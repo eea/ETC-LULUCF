@@ -415,7 +415,7 @@ def create_affor_potential(settings, affor_mask_array):
 
 
     else:
-        affor_yrly_pot_raster, _ = open_raster_from_window(outdir_affor_pot.joinpath(outname_affor_pot), bounds)
+        affor_yrly_pot_raster, _ = open_raster_from_window(Path(outdir_affor_pot).joinpath(outname_affor_pot), bounds)
         return affor_yrly_pot_raster, outname_affor_pot
 
 
