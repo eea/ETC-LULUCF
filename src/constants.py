@@ -21,7 +21,7 @@ CLC_ACC_folder = os.path.join(dir_signature, 'input_data', 'general', 'CLCACC')
 type_method = 'LUT'
 
 ## the location of the map that identifies the boundaries of all NUTS regions
-shp_extent_map = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','EEA39_extent_noDOM.shp'))
+shp_extent_map = os.path.join(dir_signature, 'etc','lulucf','AOI','EEA39_extent_noDOM.shp')
 
 
 
