@@ -81,7 +81,8 @@ def afforestation_LUT_block_proc(settings: dict):
     # TODO ADD SOME CODE THAT AUTOMATICALLY GENERATES THE CLC ACC IPCC LAYER IF NOT PRESENT
     ## check if the IPCC LU CATEGORIES MAPPING IS AVAILABLE
     file_IPCC_LU_CAT = glob.glob(os.path.join(settings.get('Basefolder_output'), 'CLC_ACC_IPCC',
-                                              'CLC2018ACC_V2018_20_IPCC_LU_Categories*.tif'))
+                                              'CLC2018ACC_V2018_20_IPCC_LU_Categories_Grassland_'
+                                              'Cropland_baseline_Tier1.tif'))
     if len(file_IPCC_LU_CAT) == 0:
         logger.error('IPCC LU CAT FILE is not available --> please generate it')
         raise

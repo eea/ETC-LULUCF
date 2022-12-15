@@ -153,7 +153,7 @@ def define_affor_areas(settings, slope_max = 87.5):
         for LUCAT in factor_scenario.keys():
             ## load the way the CLC layer is translated to IPCC LUCAT
             df_factor_IPCC_factors = pd.read_csv(os.path.join(settings.get('SOC_LUT'),
-                                                 f'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
+                                                 f'IPCC_FLU_CLC_mapping_LUT_baseline_Tier1.csv'), sep=';')
             ## get the value that defines the specific IPCC LUCAT
             value_LUCAT = df_factor_IPCC_factors.loc[df_factor_IPCC_factors['IPCC_landuse_name'] == LUCAT]\
                                                     ['IPCC_landuse_id'].values[0]
@@ -358,7 +358,7 @@ def create_affor_potential(settings, affor_mask_array):
 
                     ## load the way the CLC layer is translated to IPCC LUCAT
                     df_factor_IPCC_factors = pd.read_csv(os.path.join(settings.get('SOC_LUT'),
-                                                                      f'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
+                                                                      f'IPCC_FLU_CLC_mapping_LUT_baseline_Tier1.csv'), sep=';')
 
                     ## based on the LUT, load the yearly volumen increment of the tree species
                     #TODO now the max annual increment is taken to give the potential --> should be adjusted if more
@@ -587,14 +587,14 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
     else:
         outdir_IPCC_LUCAT = Path(settings.get('Basefolder_output')).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
 
-    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_baseline"))))[0]
+    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland_baseline_Tier1.tif'.format(settings.get("year_baseline"))))[0]
 
 
     FLU_raster, meta = open_raster_from_window(CLC_IPCC_LUCAT_dir, spatial_layer.geometry.bounds)
 
     ## load the way the CLC layer is translated to IPCC LUCAT
     df_FLU_mapping = pd.read_csv(os.path.join(settings.get('SOC_LUT'),
-                                                      f'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
+                                                      f'IPCC_FLU_CLC_mapping_LUT_baseline_Tier1.csv'), sep=';')
     lst_df_stats_NUTS = []
 
     ## also take into account the percentage that should be reforest for the total increase calculation
