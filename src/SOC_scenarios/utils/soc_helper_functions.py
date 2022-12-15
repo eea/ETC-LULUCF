@@ -134,7 +134,7 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
                         if 'CLC{}'.format(str(year_baseline)) in Path(item).stem][0]
 
     ### open LUT FLU mapping
-    df_CLC_FLU_conversion = pd.read_csv(os.path.join(SOC_LUT_folder, 'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
+    df_CLC_FLU_conversion = pd.read_csv(os.path.join(SOC_LUT_folder, 'IPCC_FLU_CLC_mapping_LUT_baseline_Tier1.csv'), sep=';')
     #only consider non empty rows for mapping
     df_CLC_FLU_conversion_dropna = df_CLC_FLU_conversion.mask(df_CLC_FLU_conversion.eq('None'))\
                                                         .dropna(subset=['CLC_id'])
@@ -169,7 +169,7 @@ def create_FLU_layer(settings, fixed_factor_creation = False):
 
     ### Also create a layer that defines the IPCC land use categories
     ### from CLC
-    outname_CLC_IPCC_LU_category = Path(CLC_ACC_file).stem + '_IPCC_LU_Categories_Grassland_Cropland.tif'
+    outname_CLC_IPCC_LU_category = Path(CLC_ACC_file).stem + '_IPCC_LU_Categories_Grassland_Cropland_baseline_Tier1.tif'
     if settings.get('Country') is None or settings.get('block_based_processing'):
         outdir_CLC_IPCC_LU_category = Path(Basefolder_output_data).joinpath('CLC_ACC_IPCC')
     else:
@@ -370,8 +370,8 @@ def create_factor_layer(settings, type_factor = 'FMG',fixed_factor_creation = Tr
         outdir_IPCC_LUCAT = Path(Basefolder_strata_output).joinpath('CLC_ACC_IPCC')
     else:
         outdir_IPCC_LUCAT = Path(Basefolder_strata_output).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
-    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_baseline"))))
-    df_CLC_FLU_conversion = pd.read_csv(os.path.join(Basefolder_LUT, 'IPCC_FLU_CLC_mapping_LUT.csv'), sep=';')
+    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland_baseline_Tier1.tif'.format(settings.get("year_baseline"))))
+    df_CLC_FLU_conversion = pd.read_csv(os.path.join(Basefolder_LUT, 'IPCC_FLU_CLC_mapping_LUT_baseline_Tier1.csv'), sep=';')
 
     ### Define the output directory where the result will be stored
     if not fixed_factor_creation:
@@ -886,14 +886,14 @@ def calc_stats_SOC_NUTS(raster_dir: str, spatial_layer: gpd,
     else:
         outdir_IPCC_LUCAT = Path(settings.get('Basefolder_output')).joinpath('CLC_ACC_IPCC').joinpath(settings.get('Country'))
 
-    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland.tif'.format(settings.get("year_baseline"))))[0]
+    CLC_IPCC_LUCAT_dir = glob.glob(os.path.join(outdir_IPCC_LUCAT, 'CLC{}ACC*Grassland_Cropland_baseline_Tier1.tif'.format(settings.get("year_baseline"))))[0]
 
 
     FLU_raster, meta = open_raster_from_window(CLC_IPCC_LUCAT_dir, spatial_layer.geometry.bounds)
 
     ### open the dataframe that gives the linkage between the FLU ID and name
     df_FLU_mapping = pd.read_csv(os.path.join(settings.get('SOC_LUT_folder')
-                                              ,'IPCC_FLU_CLC_mapping_LUT.csv'), sep = ';')
+                                              ,'IPCC_FLU_CLC_mapping_LUT_baseline_Tier1.csv'), sep = ';')
     lst_df_stats_NUTS = []
 
     for FLU_class in df_FLU_mapping['IPCC_landuse_id'].unique():
