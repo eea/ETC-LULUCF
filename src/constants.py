@@ -9,7 +9,7 @@ import geopandas as gpd
 ### Some default settings
 
 # the network drive name on which all the data is stored
-dir_signature = 'L:'
+dir_signature = '/data/inca_vol1/' #'L:'
 overwrite = False
 # folder which will be used for the output and in which all the LUT are stored
 Basefolder_strata = os.path.join(dir_signature, 'etc', 'lulucf', 'strata')
