@@ -76,6 +76,9 @@ def _get_stats_window(window, settings, df_stratification):
     # Iterate through the datasets and store the corresponding stats in a NPZ format
     dict_stats = {}
 
+    window_id = f'{window[0][0]}_{window[0][1]}_' \
+                f'{window[1][0]}_{window[1][1]}'
+
     for i, strata in df_stratification.iterrows():
         lst_loc_strata = []
         for dataset in settings.get('DATASETS'):
@@ -99,7 +102,8 @@ def _get_stats_window(window, settings, df_stratification):
             else:
                 lst_filtering = [strata[f'{dataset}_RANGE']]
             if dataset == 'SLOPE':
-                loc_strata = np.where((values_dataset >= lst_filtering[0]) & values_dataset < lst_filtering[-1])
+                loc_strata = np.where(np.logical_and(np.greater_equal(values_dataset, lst_filtering[0]),
+                                                     np.less(values_dataset, lst_filtering[-1])))
             else:
                 loc_strata = np.where(np.isin(values_dataset, lst_filtering))
 
@@ -125,7 +129,18 @@ def _get_stats_window(window, settings, df_stratification):
             values_SOC_match[values_SOC == nodatavalue] = 0
 
             sample_SOC = values_SOC[values_SOC_match == len(lst_loc_strata)]
-            ## Write to a NPZ file in the end per window
+            if sample_SOC.size == 0:
+                continue
+            dict_stats[f'STRATA_{str(strata["STRATA_ID"])}'] = sample_SOC
+
+    ## Write to a NPZ file in the end per window
+    if dict_stats:
+        outfolder = os.path.join(settings.get("outfolder"),
+                                 "stratification", "inputs")
+        os.makedirs(outfolder, exist_ok=True)
+        log.info(f'Writing sample for: {window_id}')
+        np.savez(os.path.join(outfolder, window_id + '.npz')
+                           , **dict_stats)
 
 
 def create_df_strata(lst_comb, cols, type_column=None):
