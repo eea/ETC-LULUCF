@@ -16,11 +16,45 @@ import numpy as np
 from pathlib import Path
 import rasterio
 import pandas as pd
-from SOC_scenarios.utils.soc_helper_functions import resample_raster_to_ref
 from SOC_scenarios.utils.spark import get_spark_sql
 from loguru import logger as log
 from itertools import product
 from ast import literal_eval
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+
+
+def create_hist(lst_input: list, dict_printing_stats: dict, outname: str,
+                outfolder: str, label: str, label_x: str = 'DOY of prediction', title=False, title_str=None):
+
+    fig, (ax1) = plt.subplots(1, figsize=(15, 10))
+    ax1.hist(x=lst_input, bins=15, label=label, color='black', align='mid')
+    ax1.legend(loc='upper right', fontsize=27)
+    ax1.set_xlabel(label_x, fontsize=27)
+    ax1.set_ylabel('# Pixels', fontsize=27)
+
+    # add also the text to the fig
+    lst_text = []
+    for stat_type, stat_out in dict_printing_stats.items():
+        lst_text.append(f'{stat_type}: {stat_out}')
+    textstr = '\n'.join(lst_text)
+
+    # these are matplotlib.patch.Patch properties
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+
+    # place a text box in upper left in axes coords
+    ax1.text(0.05, 0.95, textstr, transform=ax1.transAxes, fontsize=20,
+             verticalalignment='top', bbox=props)
+    ax1.tick_params(axis="x", labelsize=25)
+    ax1.tick_params(axis="y", labelsize=25)
+    ax1.set_xlim([0, 150])
+    if title:
+        ax1.set_title(title_str,  fontdict={'fontsize': 25})
+
+    plt.tight_layout()
+    fig.savefig(os.path.join(outfolder, outname))
+    plt.close()
 
 
 def window_generation(xdim: int, ydim: int, windowsize: int, stride: int,
@@ -73,12 +107,76 @@ def window_generation(xdim: int, ydim: int, windowsize: int, stride: int,
     return windowlist
 
 
+def _get_LUT_strata(strata, lst_data,
+                    df_strata_info, settings,
+                    LUC_stats='SOC'):
+
+    # check for which files info
+    # on this strata is available
+
+    LEVEL_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
+
+    log.info(f'SEARCHING STATS FOR STRATA ID: {strata}')
+    files_strata = [item for item in lst_data if f'STRATA_{str(strata)}'
+                    in list(np.load(item, mmap_mode='r').keys())]
+
+    log.info(f'FOUND {str(len(files_strata))} FILES FOR STRATA ID: {strata}')
+
+    if not files_strata:
+        return strata, (None)
+
+    # Now concatenate the corresponding data
+    data_strata = np.concatenate([np.load(item)[f'STRATA_{str(strata)}']
+                                  for item in files_strata])
+    dict_strata = {'data': data_strata}
+
+    np.savez_compressed(os.path.join(settings.get('outfolder_compiled'),
+                                     f'{LEVEL_LUC}_STRATA_{strata}.npz'),
+                        **dict_strata)
+    log.info('CONCATENATED ALL FILES IN SINGLE ARRAY')
+
+    # get the corresponding stats of the strata
+    mean_strata = np.round(np.nanmean(data_strata), 2)
+    median_strata = np.round(np.nanmedian(data_strata), 2)
+    std_strata = np.round(np.nanstd(data_strata), 2)
+    perc_25, perc_75 = np.round(np.nanpercentile(data_strata, q=[25, 75]), 2)
+
+    df_strata_stats = pd.DataFrame([mean_strata, median_strata,
+                                    std_strata, perc_25, perc_75,
+                                    data_strata.size]).T
+    df_strata_stats.columns = [f'mean_{LUC_stats}', f'median_{LUC_stats}',
+                               f'stdv_{LUC_stats}', f'perc25_{LUC_stats}',
+                               f'perc75_{LUC_stats}', f'nr_px']
+    df_strata_stats = df_strata_stats.reset_index(drop=True)
+
+    # create now a histogram from the
+    # distribution and the stats
+    dict_printing_hist = {'median': median_strata,
+                          'stdv': std_strata,
+                          'nr_px': data_strata.size}
+    outname_hist = f'HIST_{LEVEL_LUC}_STRATA_{strata}.png'
+    strata_meta = df_strata_info.loc[df_strata_info.STRATA_ID == strata]
+    ENV_ZONE = strata_meta['ENV_CAT'].values[0]
+    SLOPE_ZONE = strata_meta['SLOPE_RANGE'].values[0]
+    LUC_CAT = strata_meta['LUC_CAT'].values[0]
+    title_str = f'ENV_{ENV_ZONE}_SLOPE_{SLOPE_ZONE}_LUC_{LUC_CAT}'
+
+    create_hist(data_strata, dict_printing_hist,
+                outname_hist, settings.get('outfolder_hist'),
+                label='SOC [ton/ha]', label_x='SOC',
+                title=True, title_str=title_str)
+
+    return strata, (df_strata_stats)
+
+
 def _get_stats_window(window, settings, df_stratification):
     # Iterate through the datasets and store the corresponding stats in a NPZ format
     dict_stats = {}
 
     window_id = f'{window[0][0]}_{window[0][1]}_' \
-                f'{window[1][0]}_{window[1][1]}'
+        f'{window[1][0]}_{window[1][1]}'
+
+    Level_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
 
     for i, strata in df_stratification.iterrows():
         lst_loc_strata = []
@@ -143,7 +241,8 @@ def _get_stats_window(window, settings, df_stratification):
     # Write to a NPZ file in the end per window
     if dict_stats:
         outfolder = os.path.join(settings.get("outfolder"),
-                                 "stratification", "inputs")
+                                 "stratification", "inputs",
+                                 Level_LUC)
         os.makedirs(outfolder, exist_ok=True)
         log.info(f'Writing sample for: {window_id}')
         np.savez(os.path.join(outfolder, window_id + '.npz'), **dict_stats)
@@ -211,66 +310,163 @@ def main_SOC_analysis(settings, sql=None):
     df_full_stratification = pd.read_csv(os.path.join(
         settings.get('outfolder'), 'stratification', outname))
 
-    # check if the dimensions of all the datasets used for stratication are the same
-    for dataset_name in settings.get('DATASETS'):
-        ix = list(settings.get('DATASETS').keys()).index(dataset_name)
-        if ix == 0:
-            # Open the grid of one of the raster layers
-            xdim, ydim = rasterio.open(settings.get(
-                'DATASETS').get(dataset_name)).shape
+    if settings.get('Retrieve_SOC_kernel'):
+
+        # check if the dimensions of all the datasets used for stratication are the same
+        for dataset_name in settings.get('DATASETS'):
+            ix = list(settings.get('DATASETS').keys()).index(dataset_name)
+            if ix == 0:
+                # Open the grid of one of the raster layers
+                xdim, ydim = rasterio.open(settings.get(
+                    'DATASETS').get(dataset_name)).shape
+            else:
+                if rasterio.open(settings.get('DATASETS').get(dataset_name)).shape != (xdim, ydim):
+                    raise ValueError(
+                        f'Dimensions of datasets do not match {dataset_name}')
+
+        # Get list of windows that should be processed
+        windowlist = window_generation(xdim, ydim,
+                                       settings.get('Kernel'), stride=0,
+                                       force_match_grid=False)
+
+        log.info((f'A total of {len(windowlist)} windows have'
+                  ' been defined in this patch ...'))
+
+        # We create unique window IDs, based on the window position itself,
+        # and the EEA grid
+        window_ids = ['_'.join([str(window[0][0]),
+                                str(window[0][1]), str(window[1][0]),
+                                str(window[1][1])]) for window in windowlist]
+
+        # Put it together in a dataframe
+        df = pd.DataFrame(window_ids).rename(columns={0: 'window_id'})
+        df['x0'] = [window[0][0] for window in windowlist]
+        df['x1'] = [window[0][1] for window in windowlist]
+        df['y0'] = [window[1][0] for window in windowlist]
+        df['y1'] = [window[1][1] for window in windowlist]
+
+        # Below the script will be parallellized
+        # if not locally processed
+
+        if sql is None:
+            for i, row in df.iterrows():
+                log.info(
+                    f'Processing window {str(i)} out of {str(df.shape[0])}')
+                # if ((row.x0, row.x1), (row.y0, row.y1)) == ((768, 896), (40448, 40576)):
+                _get_stats_window(
+                    ((row.x0, row.x1),
+                        (row.y0, row.y1)),
+                    settings,
+                    df_full_stratification
+                )
         else:
-            if rasterio.open(settings.get('DATASETS').get(dataset_name)).shape != (xdim, ydim):
-                raise ValueError(
-                    f'Dimensions of datasets do not match {dataset_name}')
+            df_spark = sql.createDataFrame(df).persist()
 
-    # Get list of windows that should be processed
-    windowlist = window_generation(xdim, ydim,
-                                   settings.get('Kernel'), stride=0,
-                                   force_match_grid=False)
+            log.info('Start processing patch extraction on the executors ...')
+            sc_output = df_spark.repartition(len(df)) \
+                .rdd.map(lambda row: (row.window_id,
+                                      _get_stats_window(((row.x0, row.x1),
+                                                         (row.y0, row.y1)),
+                                                        settings,
+                                                        df_full_stratification)))\
+                .collectAsMap()
 
-    log.info((f'A total of {len(windowlist)} windows have'
-              ' been defined in this patch ...'))
+            df_spark.unpersist()
 
-    # We create unique window IDs, based on the window position itself,
-    # and the EEA grid
-    window_ids = ['_'.join([str(window[0][0]),
-                            str(window[0][1]), str(window[1][0]),
-                            str(window[1][1])]) for window in windowlist]
+        log.success('All kernel rerieval done!')
 
-    # Put it together in a dataframe
-    df = pd.DataFrame(window_ids).rename(columns={0: 'window_id'})
-    df['x0'] = [window[0][0] for window in windowlist]
-    df['x1'] = [window[0][1] for window in windowlist]
-    df['y0'] = [window[1][0] for window in windowlist]
-    df['y1'] = [window[1][1] for window in windowlist]
+    if settings.get('Compile_SOC_LUT'):
+        log.info('START COMPILING ALL DATA PER STRATA')
 
-    # Below the script will be parallellized
-    # if not locally processed
+        infolder = os.path.join(settings.get("outfolder"),
+                                "stratification", "inputs",
+                                f'LEVEL_{str(settings.get("Level_LUC_classes"))}')
 
-    if sql is None:
-        for i, row in df.iterrows():
-            log.info(f'Processing window {str(i)} out of {str(df.shape[0])}')
-            # if ((row.x0, row.x1), (row.y0, row.y1)) == ((768, 896), (40448, 40576)):
-            _get_stats_window(
-                ((row.x0, row.x1),
-                 (row.y0, row.y1)),
-                settings,
-                df_full_stratification
-            )
-    else:
-        df_spark = sql.createDataFrame(df).persist()
+        # in this folder the compiled data per strata from
+        # the input folder will be stored
+        outfolder_compiled_data = Path(infolder).parent.joinpath(
+            f'LEVEL_{str(settings.get("Level_LUC_classes"))}_compiled')
+        outfolder_LUT = os.path.join(settings.get("outfolder"),
+                                     "stratification", "LUT", 'csv')
+        outfolder_hist = os.path.join(settings.get("outfolder"),
+                                      "stratification", "LUT", 'hist')
+        outname_LUT = f'LUT_SOC_LEVEL_{str(Level_LUC)}_V1.csv'
 
-        log.info('Start processing patch extraction on the executors ...')
-        df_spark.repartition(len(df)) \
-            .rdd.map(lambda row: (row.window_id,
-                                  _get_stats_window(((row.x0, row.x1),
-                                                     (row.y0, row.y1)),
-                                                    settings,
-                                                    df_full_stratification)))\
+        # create all folders
+        os.makedirs(outfolder_LUT, exist_ok=True)
+        os.makedirs(outfolder_hist, exist_ok=True)
+        os.makedirs(outfolder_compiled_data, exist_ok=True)
 
-        df_spark.unpersist()
+        # update the settings dict with the output folders
+        settings.update({'outfolder_compiled': outfolder_compiled_data,
+                         'outfolder_hist': outfolder_hist})
 
-    log.success('All done!')
+        # First obtain list of all data
+        lst_SOC_data = [os.path.join(infolder, item) for item
+                        in os.listdir(infolder)]
+
+        if not os.path.exists(os.path.join(outfolder_LUT, outname_LUT)) or settings.get('overwrite'):
+
+            # Below the script will be parallellized
+            # if not locally processed
+            lst_df_stats = []
+            if sql is None:
+                for i, row in df_full_stratification.iterrows():
+                    log.info(
+                        f'Processing window {str(i)} out of {str(df_full_stratification.shape[0])}')
+                    strata_id, df_strata = _get_LUT_strata(
+                        row.STRATA_ID,
+                        lst_SOC_data,
+                        df_full_stratification,
+                        settings)
+
+                    if df_strata is None:
+                        continue
+
+                    # Get summary stats for LUT
+                    df_strata_meta = df_full_stratification.iloc[i]
+                    df_strata_meta = pd.DataFrame(df_strata_meta.values).T
+                    df_strata_meta.columns = row.index
+                    for j in df_strata_meta.columns:
+                        df_strata[j] = df_strata_meta[j]
+
+                    lst_df_stats.append(df_strata)
+
+            else:
+                df_spark = sql.createDataFrame(df_full_stratification).persist()
+
+                log.info('Start processing patch extraction on the executors ...')
+                sc_output = df_spark.repartition(len(df_full_stratification)) \
+                    .rdd.map(lambda row: (row.STRATA_ID,
+                                          _get_LUT_strata(
+                                              row.STRATA_ID,
+                                              lst_SOC_data,
+                                              df_full_stratification,
+                                              settings
+                                          )))\
+                    .collectAsMap()
+
+                df_spark.unpersist()
+
+                # Now merge all the output in a single
+                # dataframe
+                for strata in sc_output.keys():
+                    strata_id, df_strata = sc_output[strata]
+                    if not df_strata is None:
+                        df_strata_meta = df_full_stratification.loc[
+                            df_full_stratification.STRATA_ID == strata_id]
+                        df_strata_meta = pd.DataFrame(df_strata_meta.values).T
+                        df_strata_meta.index = df_full_stratification.loc[
+                            df_full_stratification.STRATA_ID == strata_id].columns
+                        for j in df_strata_meta.index:
+                            df_strata[j] = df_strata_meta.loc[j]
+
+                        lst_df_stats.append(df_strata)
+
+                df_all_stats = pd.concat(lst_df_stats)
+                df_all_stats = df_all_stats.reset_index(drop=True)
+                df_all_stats.to_csv(os.path.join(
+                    outfolder_LUT, outname_LUT), index=False)
 
 
 if __name__ == '__main__':
@@ -310,9 +506,20 @@ if __name__ == '__main__':
     outfolder_SOC_LUC = os.path.join(dir_signature, 'etc', 'lulucf',
                                      'strata', 'LUC')
 
-    overwrite = False
+    overwrite = True
     # If set to False, will run on the cluster
-    run_local = True
+    run_local = False
+
+    # If the  SOC sample data should not be retrieved
+    #  anymore set this to false
+    retrieve_SOC_strata_kernel = False
+
+    # Set to True if want to compile all the
+    # SOC per strate to create a LUT
+    # Please ensure that first the retrieval
+    # of the data per kernel is finished
+
+    compile_SOC_LUT = True
 
     # CLC IPCC mapping refinement contains the cross-walk between CLC and IPCC
     # at two defined levels
@@ -323,16 +530,10 @@ if __name__ == '__main__':
                 'Level_LUC_classes': Level_crosswalk,
                 'Env_zones_mapping': Env_zones_mapping,
                 'Slope_classes': SLOPE_CAT,
+                'Retrieve_SOC_kernel': retrieve_SOC_strata_kernel,
+                'Compile_SOC_LUT': compile_SOC_LUT,
                 'outfolder': outfolder_SOC_LUC,
                 'overwrite': overwrite}
-
-    # resample_raster_to_ref([DATASETS.get('DEM')], DATASETS.get('CLC'), None,
-    #                        r'L:\etc\lulucf\refs\dem',
-    #                        resample_method='bilinear',
-    #                        resample_factor=1, overwrite=False,
-    #                        resampling=True,
-    #                        dtype='Byte',
-    #                        outname='DEM_slope_3035_100m_warped.tif')
 
     ###########################################
     # First deal with the spark stuff
