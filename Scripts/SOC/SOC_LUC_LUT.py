@@ -670,9 +670,9 @@ if __name__ == '__main__':
     outfolder_SOC_LUC = os.path.join(dir_signature, 'etc', 'lulucf',
                                      'strata', 'LUC')
 
-    overwrite = False
+    overwrite = True
     # If set to False, will run on the cluster
-    run_local = False
+    run_local = True
 
     # If the  SOC sample data should not be retrieved
     #  anymore set this to false
@@ -683,13 +683,13 @@ if __name__ == '__main__':
     # Please ensure that first the retrieval
     # of the data per kernel is finished
 
-    compile_SOC_LUT = True
+    compile_SOC_LUT = False
 
     # Set to True if want to run assessment
     # on the impact of the three selected
     # stratification layers on SOC
 
-    assess_impact_lyrs_SOC = False
+    assess_impact_lyrs_SOC = True
 
     # CLC IPCC mapping refinement contains the cross-walk between CLC and IPCC
     # at two defined levels
