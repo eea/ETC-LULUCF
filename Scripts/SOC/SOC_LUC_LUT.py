@@ -315,6 +315,39 @@ def get_cdf(data, bins):
     return cdf, bins_image
 
 
+def get_conversion_LUT_strata(df, to_class, stats_conv='median'):
+    # create dataframe that provides an
+    # overview of the LUC impact
+
+    # check if the LUC to convert to is
+    # available in the specific checked strata
+    if not to_class in list(df.LUC_CAT.unique()):
+        return pd.DataFrame()
+
+    to_pool_tot = df.loc[df.LUC_CAT == to_class][f'{stats_conv}_SOC'].values[0]
+    to_pool_unc = df.loc[df.LUC_CAT == to_class]['stdv_SOC'].values[0]
+    to_nr_px = df.loc[df.LUC_CAT == to_class]['nr_px'].values[0]
+
+    # only consider applicabale LUC conversions
+
+    df_filter = df.loc[df.LUC_CAT != to_class]
+
+    df_filter = df_filter.rename(columns={'LUC_CAT': 'from_LUC',
+                                          f'{stats_conv}_SOC': 'from_SOC',
+                                          'stdv_SOC': 'from_SOC_stdv',
+                                          'nr_px': 'nr_px_from'})
+    df_filter = df_filter[['from_LUC', 'from_SOC',
+                           'from_SOC_stdv', 'STRATA_ID',
+                           'SLOPE_CAT', 'ENV_CAT', 'SLOPE_RANGE',
+                           'ENV_RANGE', 'nr_px_from']]
+    df_filter['to_LUC'] = to_class
+    df_filter['to_SOC'] = to_pool_tot
+    df_filter['to_SOC_stdv'] = to_pool_unc
+    df_filter['SOC_seq'] = df_filter['to_SOC'] - df_filter['from_SOC']
+    df_filter['nr_px_to'] = to_nr_px
+    return df_filter
+
+
 def main_SOC_analysis(settings, sql=None):
 
     # First check if stratification classes are already generated
@@ -531,6 +564,7 @@ def main_SOC_analysis(settings, sql=None):
                         for j in df_strata_meta.columns:
                             log.info(f'STRATA to write {df_strata_meta[j]}')
                             try:
+                                df_strata[j] = df_strata_meta[j].values[0]
                                 df_cdf[j] = df_strata_meta[j].values[0]
                             except:
                                 log.info(f'STRATA META IS {df_strata_meta}')
@@ -632,6 +666,40 @@ def main_SOC_analysis(settings, sql=None):
             outname = f'{LEVEL_LUC}_{dataset}_IMPACT_SOC.png'
             plot_cdf(dict_data_option, outfolder_cdf, outname, dataset)
 
+    if settings.get('Conversion_table'):
+        log.info('Start creating conversion table')
+
+        LEVEL_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
+
+        # for each LUC a conversion could be established
+        outname_conv_table = f'LUT_CONVERSION_LUC_{LEVEL_LUC}.csv'
+        # name of the file containing the SOC content per strata
+        outname_LUT = f'LUT_SOC_LEVEL_{str(Level_LUC)}_V1.csv'
+
+        outfolder_LUT = os.path.join(settings.get("outfolder"),
+                                     "stratification", "LUT", 'csv')
+
+        if not os.path.exists(os.path.join(outfolder_LUT, outname_conv_table)) or settings.get('overwrite'):
+            df_LUT = pd.read_csv(os.path.join(outfolder_LUT, outname_LUT))
+            conversion_options = list(df_LUT.LUC_CAT.unique())
+
+            lst_df_conv = []
+
+            for to_LUC in conversion_options:
+                # it is no important to group the LUC in the same strata
+                # to determine which will
+                # be the end SOC when applying a LUC
+                # in that strata
+                df_conv_table = df_LUT.groupby(
+                    ['ENV_CAT', 'SLOPE_RANGE']).apply(get_conversion_LUT_strata, to_LUC)
+                df_conv_table = df_conv_table.reset_index(drop=True)
+                lst_df_conv.append(df_conv_table)
+
+            df_full_conv_table = pd.concat(lst_df_conv)
+            df_full_conv_table = df_full_conv_table.reset_index(drop=True)
+            df_full_conv_table.to_csv(os.path.join(outfolder_LUT, outname_conv_table),
+                                      index=False)
+
 
 if __name__ == '__main__':
     # for setting permission correctly
@@ -664,13 +732,13 @@ if __name__ == '__main__':
     }
 
     # Below define level of IPCC CLC crosswalk table for SOC LUT
-    Level_crosswalk = 1
+    Level_crosswalk = 2
 
     # Define the output folder where the statistics will be stored
     outfolder_SOC_LUC = os.path.join(dir_signature, 'etc', 'lulucf',
                                      'strata', 'LUC')
 
-    overwrite = True
+    overwrite = False
     # If set to False, will run on the cluster
     run_local = True
 
@@ -689,7 +757,13 @@ if __name__ == '__main__':
     # on the impact of the three selected
     # stratification layers on SOC
 
-    assess_impact_lyrs_SOC = True
+    assess_impact_lyrs_SOC = False
+
+    # The final step is to create a from to
+    # conversion table that expresses the
+    # impact of LUC on SOC (over a certain period)
+
+    create_conversion_table = True
 
     # CLC IPCC mapping refinement contains the cross-walk between CLC and IPCC
     # at two defined levels
@@ -703,6 +777,7 @@ if __name__ == '__main__':
                 'Retrieve_SOC_kernel': retrieve_SOC_strata_kernel,
                 'Compile_SOC_LUT': compile_SOC_LUT,
                 'Assessment_SOC': assess_impact_lyrs_SOC,
+                'Conversion_table': create_conversion_table,
                 'outfolder': outfolder_SOC_LUC,
                 'overwrite': overwrite}
 
