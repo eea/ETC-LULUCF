@@ -11,6 +11,7 @@ Considered datasets for stratification:
 
 
 # Import the necessary packages
+import random
 import os
 import numpy as np
 from pathlib import Path
@@ -22,6 +23,7 @@ from itertools import product
 from ast import literal_eval
 import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib.colors as mcolors
 matplotlib.use('Agg')
 
 
@@ -123,7 +125,7 @@ def _get_LUT_strata(strata, lst_data,
     log.info(f'FOUND {str(len(files_strata))} FILES FOR STRATA ID: {strata}')
 
     if not files_strata:
-        return strata, (None)
+        return strata, [(None), (None)]
 
     # Now concatenate the corresponding data
     data_strata = np.concatenate([np.load(item)[f'STRATA_{str(strata)}']
@@ -134,6 +136,15 @@ def _get_LUT_strata(strata, lst_data,
                                      f'{LEVEL_LUC}_STRATA_{strata}.npz'),
                         **dict_strata)
     log.info('CONCATENATED ALL FILES IN SINGLE ARRAY')
+
+    # get cdf information for storing in dataframe
+    bins = np.arange(0, 150, 1)
+    cdf, bins_image = get_cdf(data_strata, bins)
+
+    df_cdf = pd.DataFrame(cdf)
+    df_cdf.columns = ['cdf']
+    df_cdf = df_cdf.T
+    df_cdf.index = [f'STRATA_{strata}']
 
     # get the corresponding stats of the strata
     mean_strata = np.round(np.nanmean(data_strata), 2)
@@ -166,7 +177,7 @@ def _get_LUT_strata(strata, lst_data,
                 label='SOC [ton/ha]', label_x='SOC',
                 title=True, title_str=title_str)
 
-    return strata, (df_strata_stats)
+    return strata, [(df_strata_stats), (df_cdf)]
 
 
 def _get_stats_window(window, settings, df_stratification):
@@ -256,6 +267,52 @@ def create_df_strata(lst_comb, cols, type_column=None):
     df_strata.reset_index(inplace=True)
 
     return df_strata
+
+
+def plot_cdf(dict_CDF, outfolder_hist, outname, param_asses):
+    fig, (ax1) = plt.subplots(nrows=1, ncols=1, figsize=(15, 10))
+
+    options_plotting = list(dict_CDF.keys())
+    options_plotting = [item for item in options_plotting if 'cdf' in item]
+    colors = mcolors.CSS4_COLORS
+    random.seed(4)
+    keys_colors = list(colors.keys())
+    keys_colors = [item for item in keys_colors if not 'white' in item]
+    random.shuffle(keys_colors)
+
+    for option in options_plotting:
+        ix = options_plotting.index(option)
+        color = keys_colors[ix]
+        data = dict_CDF.get(option)
+        label = option.split('_cdf')[0]
+
+        ax1.plot(dict_CDF.get(f'{label}_bins')[1:], data,
+                 label=label, color=color,
+                 linewidth=5)
+
+    ax1.set_xlabel('SOC [ton/ha]', fontsize=27)
+    ax1.set_xlim([0, 150])
+    ax1.set_ylabel('CDF [0-1]', fontsize=27)
+    ax1.legend(loc='center left', fontsize=27, bbox_to_anchor=(1, 0.5))
+    ax1.tick_params(axis="x", labelsize=25)
+    ax1.tick_params(axis="y", labelsize=25)
+    plt.suptitle(f'IMPACT {param_asses} on SOC', fontsize=35)
+    plt.tight_layout()
+    fig.savefig(os.path.join(outfolder_hist, outname))
+    plt.close()
+
+
+def get_cdf(data, bins):
+    # get now the CDF of the distribution
+    count, bins_image = np.histogram(data, bins=bins)
+    # finding the PDF of the histogram using count values
+    pdf = count / sum(count)
+
+    # using numpy np.cumsum to calculate the CDF
+    # We can also find using the PDF values by looping and adding
+    cdf = np.cumsum(pdf)
+
+    return cdf, bins_image
 
 
 def main_SOC_analysis(settings, sql=None):
@@ -389,8 +446,10 @@ def main_SOC_analysis(settings, sql=None):
         outfolder_LUT = os.path.join(settings.get("outfolder"),
                                      "stratification", "LUT", 'csv')
         outfolder_hist = os.path.join(settings.get("outfolder"),
-                                      "stratification", "LUT", 'hist')
+                                      "stratification", "LUT", 'hist',
+                                      f'LEVEL_{str(settings.get("Level_LUC_classes"))}')
         outname_LUT = f'LUT_SOC_LEVEL_{str(Level_LUC)}_V1.csv'
+        outname_CDF = f'CDF_SOC_LEVEL_{str(Level_LUC)}_V1.csv'
 
         # create all folders
         os.makedirs(outfolder_LUT, exist_ok=True)
@@ -405,20 +464,24 @@ def main_SOC_analysis(settings, sql=None):
         lst_SOC_data = [os.path.join(infolder, item) for item
                         in os.listdir(infolder)]
 
-        if not os.path.exists(os.path.join(outfolder_LUT, outname_LUT)) or settings.get('overwrite'):
+        if (not os.path.exists(os.path.join(outfolder_LUT, outname_LUT)) or not os.path.exists(os.path.join(outfolder_LUT, outname_CDF))) or settings.get('overwrite'):
 
             # Below the script will be parallellized
             # if not locally processed
             lst_df_stats = []
+            lst_df_cdf = []
             if sql is None:
                 for i, row in df_full_stratification.iterrows():
                     log.info(
                         f'Processing window {str(i)} out of {str(df_full_stratification.shape[0])}')
-                    strata_id, df_strata = _get_LUT_strata(
+                    strata_id, lst_df_out = _get_LUT_strata(
                         row.STRATA_ID,
                         lst_SOC_data,
                         df_full_stratification,
                         settings)
+
+                    df_strata = lst_df_out[0]
+                    df_cdf = lst_df_out[1]
 
                     if df_strata is None:
                         continue
@@ -429,8 +492,10 @@ def main_SOC_analysis(settings, sql=None):
                     df_strata_meta.columns = row.index
                     for j in df_strata_meta.columns:
                         df_strata[j] = df_strata_meta[j]
+                        df_cdf[j] = df_strata_meta[j].values[0]
 
                     lst_df_stats.append(df_strata)
+                    lst_df_cdf.append(df_cdf)
 
             else:
                 df_spark = sql.createDataFrame(df_full_stratification).persist()
@@ -451,22 +516,121 @@ def main_SOC_analysis(settings, sql=None):
                 # Now merge all the output in a single
                 # dataframe
                 for strata in sc_output.keys():
-                    strata_id, df_strata = sc_output[strata]
+                    strata_id, lst_df_out = sc_output[strata]
+                    df_strata = lst_df_out[0]
+                    df_cdf = lst_df_out[1]
                     if not df_strata is None:
                         df_strata_meta = df_full_stratification.loc[
                             df_full_stratification.STRATA_ID == strata_id]
-                        df_strata_meta = pd.DataFrame(df_strata_meta.values).T
-                        df_strata_meta.index = df_full_stratification.loc[
+                        df_strata_meta = pd.DataFrame(df_strata_meta.values)
+                        df_strata_meta.columns = df_full_stratification.loc[
                             df_full_stratification.STRATA_ID == strata_id].columns
-                        for j in df_strata_meta.index:
-                            df_strata[j] = df_strata_meta.loc[j]
+
+                        log.info(f'STRATA META IS {df_strata_meta}')
+                        log.info(f'STRATA META SHAPE {df_strata_meta.shape}')
+                        for j in df_strata_meta.columns:
+                            log.info(f'STRATA to write {df_strata_meta[j]}')
+                            try:
+                                df_cdf[j] = df_strata_meta[j].values[0]
+                            except:
+                                log.info(f'STRATA META IS {df_strata_meta}')
 
                         lst_df_stats.append(df_strata)
+                        lst_df_cdf.append(df_cdf)
 
                 df_all_stats = pd.concat(lst_df_stats)
                 df_all_stats = df_all_stats.reset_index(drop=True)
                 df_all_stats.to_csv(os.path.join(
                     outfolder_LUT, outname_LUT), index=False)
+
+                df_all_cdf = pd.concat(lst_df_cdf)
+                df_all_cdf = df_all_cdf.reset_index(drop=True)
+                df_all_cdf.to_csv(os.path.join(
+                    outfolder_LUT, outname_CDF), index=False)
+
+    if settings.get('Assessment_SOC'):
+
+        # for each dataset it will be
+        # determined what is the corresponding
+        # impact on SOC
+
+        infolder = os.path.join(settings.get("outfolder"),
+                                "stratification", "inputs",
+                                f'LEVEL_{str(settings.get("Level_LUC_classes"))}')
+
+        outfolder_compiled_data = Path(infolder).parent.joinpath(
+            f'LEVEL_{str(settings.get("Level_LUC_classes"))}_compiled')
+
+        outfolder_cdf = os.path.join(settings.get("outfolder"),
+                                     "stratification", "LUT", 'CDF')
+        os.makedirs(outfolder_cdf, exist_ok=True)
+
+        data_folder = outfolder_compiled_data
+
+        # load all the files with the data
+
+        lst_data = os.listdir(data_folder)
+
+        LEVEL_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
+
+        bins = np.arange(0, 150, 1)
+
+        for dataset in DATASETS:
+
+            log.info(f'ASSESSING IMPACT FOR DATASET {dataset}')
+
+            if dataset == 'SOC':
+                continue
+
+            # determine which strata should
+            # be grouped to assess the impact
+
+            # define unique classes for the dataset
+
+            if not 'SLOPE' in dataset:
+                dataset_options = list(
+                    df_full_stratification[f'{dataset}_CAT'].unique())
+            else:
+                dataset_options = list(
+                    df_full_stratification[f'{dataset}_RANGE'].unique())
+
+            dict_data_option = {}
+
+            for option in dataset_options:
+                log.info(
+                    f'LOADING ALL DATA FOR {option} {dataset_options.index(option)}/{len(dataset_options)}')
+
+                if not 'SLOPE' in dataset:
+                    strata_IDs_option = list(
+                        df_full_stratification.loc[df_full_stratification[f'{dataset}_CAT'] == option]
+                        .STRATA_ID.values)
+                else:
+                    strata_IDs_option = list(
+                        df_full_stratification.loc[df_full_stratification[f'{dataset}_RANGE'] == option]
+                        .STRATA_ID.values)
+
+                strata_IDs_option = [
+                    f'{LEVEL_LUC}_STRATA_{str(item)}.npz' for item in strata_IDs_option]
+
+                # filter now on the files that should be loaded
+                lst_data_option = [os.path.join(
+                    data_folder, item) for item in lst_data if item in strata_IDs_option]
+
+                if not lst_data_option:
+                    continue
+
+                data_option = np.concatenate([np.load(item)['data']
+                                              for item in lst_data_option])
+
+                cdf, bins_image = get_cdf(data_option, bins)
+
+                dict_data_option.update({f'{option}_or': data_option,
+                                         f'{option}_cdf': cdf,
+                                         f'{option}_bins': bins_image})
+
+            # plot the CDF of the specific assessed options
+            outname = f'{LEVEL_LUC}_{dataset}_IMPACT_SOC.png'
+            plot_cdf(dict_data_option, outfolder_cdf, outname, dataset)
 
 
 if __name__ == '__main__':
@@ -506,7 +670,7 @@ if __name__ == '__main__':
     outfolder_SOC_LUC = os.path.join(dir_signature, 'etc', 'lulucf',
                                      'strata', 'LUC')
 
-    overwrite = True
+    overwrite = False
     # If set to False, will run on the cluster
     run_local = False
 
@@ -521,6 +685,12 @@ if __name__ == '__main__':
 
     compile_SOC_LUT = True
 
+    # Set to True if want to run assessment
+    # on the impact of the three selected
+    # stratification layers on SOC
+
+    assess_impact_lyrs_SOC = False
+
     # CLC IPCC mapping refinement contains the cross-walk between CLC and IPCC
     # at two defined levels
 
@@ -532,6 +702,7 @@ if __name__ == '__main__':
                 'Slope_classes': SLOPE_CAT,
                 'Retrieve_SOC_kernel': retrieve_SOC_strata_kernel,
                 'Compile_SOC_LUT': compile_SOC_LUT,
+                'Assessment_SOC': assess_impact_lyrs_SOC,
                 'outfolder': outfolder_SOC_LUC,
                 'overwrite': overwrite}
 
