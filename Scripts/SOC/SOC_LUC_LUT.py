@@ -18,6 +18,8 @@ from pathlib import Path
 import rasterio
 import pandas as pd
 from SOC_scenarios.utils.spark import get_spark_sql
+from SOC_scenarios.utils.soc_helper_functions import (
+    window_generation, define_processing_grid)
 from loguru import logger as log
 from itertools import product
 from ast import literal_eval
@@ -57,56 +59,6 @@ def create_hist(lst_input: list, dict_printing_stats: dict, outname: str,
     plt.tight_layout()
     fig.savefig(os.path.join(outfolder, outname))
     plt.close()
-
-
-def window_generation(xdim: int, ydim: int, windowsize: int, stride: int,
-                      force_match_grid: bool = True):
-    """
-    Function that will generate a list of (unique) windows that could be processed along the defined
-    dimensions
-    :param xdim: the size of the x-dimension
-    :param ydim: the size of the y-dimension
-    :param windowsize: the size that each window should have (windowsize x windowsize).
-    :param stride: the overlap that the windows may have
-    :param force_match_grid: define if the windows should cover the full xdim, ydim extent even this causes an overlap
-    of some of the windows. If this is set to False together with a stide of zero, there will be no overlap between
-    the windows. Hence, it might happen that the windowlist does not fully cover the dimensions.
-    :return: list of windows that could be processed
-    """
-    #
-    # force_match_grid: determines that wen a window would fall outside the xdim, ydim, a reshufelling of that
-    # window should be forced such that is nicely ends at the bounds of the image or not. If set to false this last
-    # window will not be created and as such the last pixels in the grid are not covered
-    #
-    # Get the windows
-    windowlist = []
-    for xStart in range(0, xdim, windowsize - 2 * stride):
-        for yStart in range(0, ydim, windowsize - 2 * stride):
-            # We need to check if we're at the end of the master image
-            # We have to make sure we have a full subtile
-            # so we need to expand such tile and the resulting overlap
-            # with previous subtile is not an issue
-            if xStart + windowsize > xdim:
-                if force_match_grid or stride > 0:
-                    xStart = xdim - windowsize
-                    xEnd = xdim
-                else:
-                    continue
-
-            else:
-                xEnd = xStart + windowsize
-            if yStart + windowsize > ydim:
-                if force_match_grid or stride > 0:
-                    yStart = ydim - windowsize
-                    yEnd = ydim
-                else:
-                    continue
-            else:
-                yEnd = yStart + windowsize
-
-            windowlist.append(((xStart, xEnd), (yStart, yEnd)))
-
-    return windowlist
 
 
 def _get_LUT_strata(strata, lst_data,
@@ -414,26 +366,12 @@ def main_SOC_analysis(settings, sql=None):
                     raise ValueError(
                         f'Dimensions of datasets do not match {dataset_name}')
 
-        # Get list of windows that should be processed
-        windowlist = window_generation(xdim, ydim,
-                                       settings.get('Kernel'), stride=0,
-                                       force_match_grid=False)
+        # define the window on which
+        # the processing should be done
+        df = define_processing_grid(settings, xdim, ydim)
 
-        log.info((f'A total of {len(windowlist)} windows have'
+        log.info((f'A total of {df.shape[0]} windows have'
                   ' been defined in this patch ...'))
-
-        # We create unique window IDs, based on the window position itself,
-        # and the EEA grid
-        window_ids = ['_'.join([str(window[0][0]),
-                                str(window[0][1]), str(window[1][0]),
-                                str(window[1][1])]) for window in windowlist]
-
-        # Put it together in a dataframe
-        df = pd.DataFrame(window_ids).rename(columns={0: 'window_id'})
-        df['x0'] = [window[0][0] for window in windowlist]
-        df['x1'] = [window[0][1] for window in windowlist]
-        df['y0'] = [window[1][0] for window in windowlist]
-        df['y1'] = [window[1][1] for window in windowlist]
 
         # Below the script will be parallellized
         # if not locally processed
