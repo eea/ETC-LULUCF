@@ -674,7 +674,7 @@ if __name__ == '__main__':
 
     # Define the output folder where the statistics will be stored
     outfolder_SOC_LUC = os.path.join(dir_signature, 'etc', 'lulucf',
-                                     'strata', 'LUC')
+                                     'strata', 'SOC_LUC')
 
     overwrite = False
     # If set to False, will run on the cluster
