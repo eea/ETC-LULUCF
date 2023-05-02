@@ -24,13 +24,18 @@ import os
 from loguru import logger as log
 from pathlib import Path
 import pandas as pd
-from SOC_scenarios.utils.soc_helper_functions import (
-    define_processing_grid,
-    add_metadata_raster)
+import geopandas as gpd
 import rasterio
 import numpy as np
 import datetime
+import shapely
+from shapely.geometry.multipolygon import MultiPolygon
+
+
 from SOC_scenarios.utils.spark import get_spark_sql
+from SOC_scenarios.utils.soc_helper_functions import (
+    define_processing_grid,
+    add_metadata_raster)
 
 
 def _get_degraded_peatland_window(window, settings, peat_id):
@@ -311,6 +316,152 @@ def estimate_avoided_emissions(settings, df_grid,
                         os.path.join(outfolder, outname))
 
 
+def _get_stats_region(ID, region, dir_raster_avd_emis,
+                      dir_raster_degraded, settings):
+
+    if type(region) == gpd.GeoDataFrame:
+        region = pd.DataFrame(region.loc[region.NUTS_ID == ID]).squeeze()
+        region.geometry = shapely.wkt.loads(region.geometry)
+
+    if region.geometry is None:
+        return ID, pd.DataFrame()
+
+    # Load the LULUCF mapping information
+    CLC_mapping_LULUCF = settings.get('CLC_mapping_LULUCF')
+    LULUCF_categories = CLC_mapping_LULUCF.get('LEVEL1')
+    CLC_dir_raster = settings.get('DATASETS').get('LUC')
+
+    # Open first all needed rasters
+    if type(region.geometry) == shapely.geometry.multipolygon.MultiPolygon:
+        geom = MultiPolygon(region.geometry).geoms
+    else:
+        geom = MultiPolygon([region.geometry]).geoms
+
+    with rasterio.open(CLC_dir_raster, 'r') as CLC_object:
+        try:
+            CLC_region, CLC_transform = rasterio.mask.mask(CLC_object,
+                                                           geom,
+                                                           crop=True)
+
+        except:
+            log.warning(
+                f'No intersection with region {region.NUTS_ID} possible')
+            return ID, pd.DataFrame()
+
+    with rasterio.open(dir_raster_degraded, 'r') as degraded_object:
+        degraded_region, degraded_transform = rasterio.mask.mask(degraded_object,
+                                                                 geom,
+                                                                 crop=True)
+
+    with rasterio.open(dir_raster_avd_emis, 'r') as avd_emis_object:
+        avd_emis_region, avd_emis_transform = rasterio.mask.mask(avd_emis_object,
+                                                                 geom,
+                                                                 crop=True)
+
+    dict_info_per_category = {}
+    for LULUCF_cat in LULUCF_categories:
+        loc_LULUCF = np.where(
+            np.isin(CLC_region, LULUCF_categories.get(LULUCF_cat)))
+
+        if loc_LULUCF[0].size == 0:
+            # write info in dictionary
+            dict_info_per_category.update({LULUCF_cat: {
+                'ha_degraded': 0,
+                f'ha_{LULUCF_cat}': 0,
+                'yrly_avoided_emiss_ha': None
+            }})
+
+        # Get overview of LULUCF category distribution
+        # per region
+        area_LULUCF = np.round(loc_LULUCF[0].size)
+
+        # Count the nr of degraded pixels per LULUCF category
+        area_degraded = np.round(
+            np.where(degraded_region[loc_LULUCF] == 1)[0].size)
+        loc_degraded = np.where(degraded_region == 1)
+
+        # Get now average avoided emission per LULUCF category
+        avd_emis_region_copy = np.zeros(avd_emis_region.shape)
+        avd_emis_region_copy[loc_degraded] += 1
+        avd_emis_region_copy[loc_LULUCF] += 1
+
+        avd_emis_mean = np.round(
+            np.mean(avd_emis_region[np.where(avd_emis_region_copy == 2)]), 2)
+
+        # write info in dictionary
+        dict_info_per_category.update({LULUCF_cat: {
+            'degraded_[ha]': area_degraded,
+            'LULUCF_cat_[ha]': area_LULUCF,
+            'avoided_emiss_[tCO2/ha/yr]': avd_emis_mean
+        }})
+
+    df_region = pd.DataFrame.from_dict(dict_info_per_category).T
+    df_region['LULUCF_cat'] = df_region.index
+    df_region = df_region.reset_index(drop=True)
+
+    region_info = pd.concat([region.to_frame().T]
+                            * df_region.shape[0]).reset_index(drop=True)
+    region_info = region_info[['NUTS_ID', 'LEVL_CODE',
+                               'CNTR_CODE', 'NUTS_NAME', 'geometry']]
+    region_info['CNTR_CODE'] = region_info['CNTR_CODE'].astype(str)
+    region_info['LEVL_CODE'] = region_info['LEVL_CODE'].astype(str)
+
+    df_merged = pd.concat([df_region, region_info], axis=1)
+
+    return ID, df_merged
+
+
+def stats_region(dir_vector, dir_raster_avd_emis,
+                 dir_raster_degraded, outdir,
+                 settings, sql=None):
+
+    # Load the corresponding vector file
+
+    VECTORS_geoms = gpd.read_file(dir_vector)
+
+    lst_df_stats = []
+    if sql is None:
+        for k, region in VECTORS_geoms.iterrows():
+            log.info(
+                f'Processing region {str(k+1)} out of {VECTORS_geoms.shape[0]}')
+
+            ID, df_stats = _get_stats_region(k, region, dir_raster_avd_emis,
+                                             dir_raster_degraded, settings)
+
+            lst_df_stats.append(df_stats)
+
+    else:
+        VECTORS_geoms_spark = pd.DataFrame(VECTORS_geoms)
+        VECTORS_geoms_spark['geometry'] = VECTORS_geoms_spark['geometry'] = [
+            item.wkt if item is not None else item for item in VECTORS_geoms_spark.geometry]
+        df_spark = sql.createDataFrame(VECTORS_geoms_spark).persist()
+
+        log.info('Start processing patch extraction on the executors ...')
+        sc_output = df_spark.repartition(len(VECTORS_geoms_spark)) \
+            .rdd.map(lambda row: (row.NUTS_ID,
+                                  _get_stats_region(row.NUTS_ID, VECTORS_geoms, dir_raster_avd_emis,
+                                                    dir_raster_degraded, settings)))\
+            .collectAsMap()
+
+        df_spark.unpersist()
+
+        log.success('All kernel rerieval done!')
+
+        for id in sc_output.keys():
+            id_region, df_stats = sc_output[id]
+            lst_df_stats.append(df_stats)
+
+    # Merge all the stats together
+    df_final = pd.concat(lst_df_stats)
+    df_final = df_final.reset_index(drop=True)
+    gpd_final = gpd.GeoDataFrame(df_final,
+                                 geometry=df_final['geometry'])
+
+    gpd_final.crs = 3035
+
+    gpd_final.to_file(outdir, driver='GeoJSON')
+
+
 def main_avoided_emissions_peatland(settings, sql):
     #######################################
     # PART1: Determine degraded peatland
@@ -337,19 +488,19 @@ def main_avoided_emissions_peatland(settings, sql):
 
     outname_degr_peat = 'Degraded_peatland.tif'
 
-    # if not os.access(os.path.join(outfolder_degr_peat, outname_degr_peat), os.R_OK) \
-    #         and os.path.exists(os.path.join(outfolder_degr_peat, outname_degr_peat)):  # NOQA
-    #     log.warning('Cannot open degradation file --> so do processing again!')
-    #     os.unlink(os.path.join(outfolder_degr_peat, outname_degr_peat))
+    if not os.access(os.path.join(outfolder_degr_peat, outname_degr_peat), os.R_OK) \
+            and os.path.exists(os.path.join(outfolder_degr_peat, outname_degr_peat)):  # NOQA
+        log.warning('Cannot open degradation file --> so do processing again!')
+        os.unlink(os.path.join(outfolder_degr_peat, outname_degr_peat))
 
-    # if not os.path.exists(os.path.join(outfolder_degr_peat, outname_degr_peat)) or settings.get('overwrite'):
+    if not os.path.exists(os.path.join(outfolder_degr_peat, outname_degr_peat)) or settings.get('overwrite'):
 
-    #     if os.path.exists(os.path.join(outfolder_degr_peat, outname_degr_peat)):
-    #         os.unlink(os.path.join(outfolder_degr_peat, outname_degr_peat))
-    #     get_degraded_peatland(settings, df_grid_proc, outfolder_degr_peat,
-    #                           outname_degr_peat, sql=sql)
+        if os.path.exists(os.path.join(outfolder_degr_peat, outname_degr_peat)):
+            os.unlink(os.path.join(outfolder_degr_peat, outname_degr_peat))
+        get_degraded_peatland(settings, df_grid_proc, outfolder_degr_peat,
+                              outname_degr_peat, sql=sql)
 
-    #     log.success('Degraded peatland mapping finished')
+        log.success('Degraded peatland mapping finished')
 
     # add patch of degraded peatland to settings
     DATASETS = settings.get('DATASETS')
@@ -392,6 +543,36 @@ def main_avoided_emissions_peatland(settings, sql):
                                    outfolder_emis, outname_emis,
                                    sql)
 
+    ##############################################
+    # PART3: SPATIAL AGGREGATE AVOIDED EMISSIONS
+    ##############################################
+
+    # Summarize the potential for rewetting
+    # for different NUTS regions
+
+    # Define the output folder
+    outfolder_vector_stats = os.path.join(settings.get('BASEFOLDER'),
+                                          'vector')
+    outname_vectors_stats = 'NUTS_avoided_emissions_yrly.geojson'
+    os.makedirs(outfolder_vector_stats, exist_ok=True)
+
+    if not os.access(os.path.join(outfolder_vector_stats, outname_vectors_stats), os.R_OK) \
+        and os.path.exists(os.path.join(outfolder_vector_stats, outname_vectors_stats)):  # NOQA
+        log.warning(
+            'Cannot open aggregated avoided emissions --> do processing again')
+        os.unlink(os.path.join(outfolder_vector_stats, outname_vectors_stats))
+
+    if not os.path.exists(os.path.join(outfolder_vector_stats, outname_vectors_stats)) or settings.get('overwrite'):
+        if os.path.exists(os.path.join(outfolder_vector_stats, outname_vectors_stats)):
+            os.unlink(os.path.join(outfolder_vector_stats, outname_vectors_stats))
+
+        stats_region(settings.get('VECTORS').get('NUTS'),
+                     os.path.join(outfolder_emis, outname_emis),
+                     os.path.join(outfolder_degr_peat, outname_degr_peat),
+                     os.path.join(outfolder_vector_stats,
+                                  outname_vectors_stats),
+                     settings, sql=sql)
+
 
 if __name__ == '__main__':
     # for setting permission correctly
@@ -424,6 +605,14 @@ if __name__ == '__main__':
 
     }
 
+    # Define locations of vector based datasets for spatial aggregation
+
+    VECTORS = {
+        'NUTS': os.path.join(dir_signature, 'etc',
+                             'lulucf', 'AOI',
+                             'NUTS_RG_20M_2021_3035.shp')
+    }
+
     # Define locations of required LUT
 
     TABLES = {
@@ -435,7 +624,7 @@ if __name__ == '__main__':
                                        'IPCC_emissions_rewetted_peat.csv')
     }
 
-    overwrite = True
+    overwrite = False
     Basefolder_output = os.path.join(dir_signature, 'etc', 'lulucf',
                                      'strata', 'Peatland')
     os.makedirs(Basefolder_output, exist_ok=True)
@@ -451,6 +640,7 @@ if __name__ == '__main__':
     # store all processing settings in dictionary
     settings = {'DATASETS': DATASETS,
                 'TABLES': TABLES,
+                'VECTORS': VECTORS,
                 'BASEFOLDER': Basefolder_output,
                 'peat_id': peatland_id,
                 'scale_factor': 0.01,
