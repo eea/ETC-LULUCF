@@ -284,15 +284,15 @@ def get_conversion_LUT_strata(df, to_class, stats_conv='median'):
 
     df_filter = df.loc[df.LUC_CAT != to_class]
 
-    df_filter = df_filter.rename(columns={'LUC_CAT': 'from_LUC',
+    df_filter = df_filter.rename(columns={'LUC_CAT': 'from_LULUCF_cat',
                                           f'{stats_conv}_SOC': 'from_SOC',
                                           'stdv_SOC': 'from_SOC_stdv',
                                           'nr_px': 'nr_px_from'})
-    df_filter = df_filter[['from_LUC', 'from_SOC',
+    df_filter = df_filter[['from_LULUCF_cat', 'from_SOC',
                            'from_SOC_stdv', 'STRATA_ID',
                            'SLOPE_CAT', 'ENV_CAT', 'SLOPE_RANGE',
                            'ENV_RANGE', 'nr_px_from']]
-    df_filter['to_LUC'] = to_class
+    df_filter['to_from_LULUCF_cat'] = to_class
     df_filter['to_SOC'] = to_pool_tot
     df_filter['to_SOC_stdv'] = to_pool_unc
     df_filter['SOC_seq'] = df_filter['to_SOC'] - df_filter['from_SOC']
