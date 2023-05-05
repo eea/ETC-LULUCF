@@ -273,16 +273,16 @@ def get_conversion_LUT_strata(df, to_class, stats_conv='median'):
 
     # check if the LUC to convert to is
     # available in the specific checked strata
-    if not to_class in list(df.LUC_CAT.unique()):
+    if not to_class in list(df.LU_CAT.unique()):
         return pd.DataFrame()
 
-    to_pool_tot = df.loc[df.LUC_CAT == to_class][f'{stats_conv}_SOC'].values[0]
-    to_pool_unc = df.loc[df.LUC_CAT == to_class]['stdv_SOC'].values[0]
-    to_nr_px = df.loc[df.LUC_CAT == to_class]['nr_px'].values[0]
+    to_pool_tot = df.loc[df.LU_CAT == to_class][f'{stats_conv}_SOC'].values[0]
+    to_pool_unc = df.loc[df.LU_CAT == to_class]['stdv_SOC'].values[0]
+    to_nr_px = df.loc[df.LU_CAT == to_class]['nr_px'].values[0]
 
     # only consider applicabale LUC conversions
 
-    df_filter = df.loc[df.LUC_CAT != to_class]
+    df_filter = df.loc[df.LU_CAT != to_class]
 
     df_filter = df_filter.rename(columns={'LU_CAT': 'from_LU_cat',
                                           f'{stats_conv}_SOC': 'from_SOC',
@@ -619,7 +619,7 @@ def main_SOC_analysis(settings, sql=None):
 
         if not os.path.exists(os.path.join(outfolder_LUT, outname_conv_table)) or settings.get('overwrite'):
             df_LUT = pd.read_csv(os.path.join(outfolder_LUT, outname_LUT))
-            conversion_options = list(df_LUT.LUC_CAT.unique())
+            conversion_options = list(df_LUT.LU_CAT.unique())
 
             lst_df_conv = []
 
@@ -671,7 +671,7 @@ if __name__ == '__main__':
 
     # Below define level of IPCC CLC crosswalk table
     # Current options: 'LULUCF' & 'SOC_classif'
-    Level_crosswalk = 'SOC_classif'
+    Level_crosswalk = 'LULUCF'
 
     # Define the output folder where the statistics will be stored
     outfolder_SOC_LUC = os.path.join(dir_signature, 'etc', 'lulucf',
@@ -683,7 +683,7 @@ if __name__ == '__main__':
 
     # If the  SOC sample data should not be retrieved
     #  anymore set this to false
-    retrieve_SOC_strata_kernel = True
+    retrieve_SOC_strata_kernel = False
 
     # Set to True if want to compile all the
     # SOC per strate to create a LUT
