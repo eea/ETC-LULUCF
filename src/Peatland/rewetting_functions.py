@@ -178,7 +178,7 @@ def _get_avoided_emiss_window(window, settings):
 
         # Now based on LULUCF class use LUT table to know
         # to which CLC classes it corresponds
-        CLC_CLASSES = CLC_LULUCF_mapping.get('LEVEL1').get(LULUCF_NAME)
+        CLC_CLASSES = CLC_LULUCF_mapping.get('LEVEL_LULUCF').get(LULUCF_NAME)
 
         # find the location to attribute the emission factor
         # based on the different datasets
@@ -302,7 +302,7 @@ def _get_stats_region(ID, region, dir_raster_avd_emis,
 
     # Load the LULUCF mapping information
     CLC_mapping_LULUCF = settings.get('CLC_mapping_LULUCF')
-    LULUCF_categories = CLC_mapping_LULUCF.get('LEVEL1')
+    LULUCF_categories = CLC_mapping_LULUCF.get('LEVEL_LULUCF')
     CLC_dir_raster = settings.get('DATASETS').get('LUC')
 
     # Open first all needed rasters
