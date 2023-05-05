@@ -80,6 +80,7 @@ def _get_LUT_strata(strata, lst_data,
         return strata, [(None), (None)]
 
     # Now concatenate the corresponding data
+    log.info('CONCATENATED ALL FILES IN SINGLE ARRAY')
     data_strata = np.concatenate([np.load(item)[f'STRATA_{str(strata)}']
                                   for item in files_strata])
     dict_strata = {'data': data_strata}
@@ -87,7 +88,6 @@ def _get_LUT_strata(strata, lst_data,
     np.savez_compressed(os.path.join(settings.get('outfolder_compiled'),
                                      f'{LEVEL_LUC}_STRATA_{strata}.npz'),
                         **dict_strata)
-    log.info('CONCATENATED ALL FILES IN SINGLE ARRAY')
 
     # get cdf information for storing in dataframe
     bins = np.arange(0, 150, 1)
@@ -121,8 +121,8 @@ def _get_LUT_strata(strata, lst_data,
     strata_meta = df_strata_info.loc[df_strata_info.STRATA_ID == strata]
     ENV_ZONE = strata_meta['ENV_CAT'].values[0]
     SLOPE_ZONE = strata_meta['SLOPE_RANGE'].values[0]
-    LUC_CAT = strata_meta['LUC_CAT'].values[0]
-    title_str = f'ENV_{ENV_ZONE}_SLOPE_{SLOPE_ZONE}_LUC_{LUC_CAT}'
+    LUC_CAT = strata_meta['LU_CAT'].values[0]
+    title_str = f'ENV_{ENV_ZONE}_SLOPE_{SLOPE_ZONE}_LU_{LUC_CAT}'
 
     create_hist(data_strata, dict_printing_hist,
                 outname_hist, settings.get('outfolder_hist'),
@@ -273,26 +273,26 @@ def get_conversion_LUT_strata(df, to_class, stats_conv='median'):
 
     # check if the LUC to convert to is
     # available in the specific checked strata
-    if not to_class in list(df.LUC_CAT.unique()):
+    if not to_class in list(df.LU_CAT.unique()):
         return pd.DataFrame()
 
-    to_pool_tot = df.loc[df.LUC_CAT == to_class][f'{stats_conv}_SOC'].values[0]
-    to_pool_unc = df.loc[df.LUC_CAT == to_class]['stdv_SOC'].values[0]
-    to_nr_px = df.loc[df.LUC_CAT == to_class]['nr_px'].values[0]
+    to_pool_tot = df.loc[df.LU_CAT == to_class][f'{stats_conv}_SOC'].values[0]
+    to_pool_unc = df.loc[df.LU_CAT == to_class]['stdv_SOC'].values[0]
+    to_nr_px = df.loc[df.LU_CAT == to_class]['nr_px'].values[0]
 
     # only consider applicabale LUC conversions
 
-    df_filter = df.loc[df.LUC_CAT != to_class]
+    df_filter = df.loc[df.LU_CAT != to_class]
 
-    df_filter = df_filter.rename(columns={'LUC_CAT': 'from_LULUCF_cat',
+    df_filter = df_filter.rename(columns={'LU_CAT': 'from_LU_cat',
                                           f'{stats_conv}_SOC': 'from_SOC',
                                           'stdv_SOC': 'from_SOC_stdv',
                                           'nr_px': 'nr_px_from'})
-    df_filter = df_filter[['from_LULUCF_cat', 'from_SOC',
+    df_filter = df_filter[['from_LU_cat', 'from_SOC',
                            'from_SOC_stdv', 'STRATA_ID',
                            'SLOPE_CAT', 'ENV_CAT', 'SLOPE_RANGE',
                            'ENV_RANGE', 'nr_px_from']]
-    df_filter['to_from_LULUCF_cat'] = to_class
+    df_filter['to_LU_cat'] = to_class
     df_filter['to_SOC'] = to_pool_tot
     df_filter['to_SOC_stdv'] = to_pool_unc
     df_filter['SOC_seq'] = df_filter['to_SOC'] - df_filter['from_SOC']
@@ -304,7 +304,7 @@ def main_SOC_analysis(settings, sql=None):
 
     # First check if stratification classes are already generated
     Level_LUC = settings.get('Level_LUC_classes')
-    outname = f'Stratification_SOC_LUC_classes_LEVEL{str(Level_LUC)}.csv'
+    outname = f'Stratification_SOC_LU_classes_LEVEL{str(Level_LUC)}.csv'
     if not os.path.exists(os.path.join(settings.get('outfolder'), 'stratification', outname))  \
             or settings.get('overwrite'):
         # Now for each dataset layer the different classes will be defined
@@ -324,9 +324,9 @@ def main_SOC_analysis(settings, sql=None):
 
         # 3 IPCC LULUCF classes based on CLC
         LUC_CAT = list(settings.get('CLC_cross_walk').get(
-            f'LEVEL{str(Level_LUC)}').keys())
+            f'LEVEL_{str(Level_LUC)}').keys())
         LUC_RANGE = [settings.get('CLC_cross_walk').get(
-            f'LEVEL{str(Level_LUC)}').get(item) for item in LUC_CAT]
+            f'LEVEL_{str(Level_LUC)}').get(item) for item in LUC_CAT]
 
         # Get now a list of all possible combinations for stratification
         All_combinations_CAT = list(product(SLOPE_CAT, ENV_CAT, LUC_CAT))
@@ -337,13 +337,13 @@ def main_SOC_analysis(settings, sql=None):
         # This ID will be used to join both lists together to obtain a full dataframe expressing
         # the entire defined stratification
         df_all_range = create_df_strata(All_combinations_RANGE, [
-            'SLOPE_RANGE', 'ENV_RANGE', 'LUC_RANGE'])
+            'SLOPE_RANGE', 'ENV_RANGE', 'LU_RANGE'])
         df_all_cat = create_df_strata(
-            All_combinations_CAT, ['SLOPE_CAT', 'ENV_CAT', 'LUC_CAT'])
+            All_combinations_CAT, ['SLOPE_CAT', 'ENV_CAT', 'LU_CAT'])
 
         df_full_stratification = pd.merge(
             df_all_cat, df_all_range, on='STRATA_ID')
-        df_full_stratification['LEVEL_LUC'] = [
+        df_full_stratification['LEVEL_LU'] = [
             Level_LUC] * df_full_stratification.shape[0]
         df_full_stratification.to_csv(os.path.join(settings.get(
             'outfolder'), 'stratification', outname), index=False)
@@ -610,7 +610,7 @@ def main_SOC_analysis(settings, sql=None):
         LEVEL_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
 
         # for each LUC a conversion could be established
-        outname_conv_table = f'LUT_CONVERSION_LUC_{LEVEL_LUC}.csv'
+        outname_conv_table = f'LUT_CONVERSION_LU_{LEVEL_LUC}.csv'
         # name of the file containing the SOC content per strata
         outname_LUT = f'LUT_SOC_LEVEL_{str(Level_LUC)}_V1.csv'
 
@@ -619,7 +619,7 @@ def main_SOC_analysis(settings, sql=None):
 
         if not os.path.exists(os.path.join(outfolder_LUT, outname_conv_table)) or settings.get('overwrite'):
             df_LUT = pd.read_csv(os.path.join(outfolder_LUT, outname_LUT))
-            conversion_options = list(df_LUT.LUC_CAT.unique())
+            conversion_options = list(df_LUT.LU_CAT.unique())
 
             lst_df_conv = []
 
@@ -655,8 +655,8 @@ if __name__ == '__main__':
         'ENV': os.path.join(dir_signature, 'etc', 'lulucf', 'input_data',
                             'EnvZones', 'eea_r_3035_100_m_EnvZ-Metzger_2020_v1_r00.tif'),
         'SLOPE':  os.path.join(dir_signature, 'etc', 'lulucf', 'refs', 'dem', 'DEM_slope_3035_100m_warped.tif'),
-        'LUC': os.path.join(dir_signature, 'input_data', 'general',
-                            'CLCACC', 'CLC2018ACC_V2018_20.tif'),
+        'LU': os.path.join(dir_signature, 'input_data', 'general',
+                           'CLCACC', 'CLC2018ACC_V2018_20.tif'),
         'SOC': os.path.join(dir_signature, 'etc', 'lulucf', 'refs', 'isric', 'ocs_0-30cm_mean_3035_100m.tif')
     }
 
@@ -669,8 +669,9 @@ if __name__ == '__main__':
         'STEEP': [20, 1000]
     }
 
-    # Below define level of IPCC CLC crosswalk table for SOC LUT
-    Level_crosswalk = 2
+    # Below define level of IPCC CLC crosswalk table
+    # Current options: 'LULUCF' & 'SOC_classif'
+    Level_crosswalk = 'LULUCF'
 
     # Define the output folder where the statistics will be stored
     outfolder_SOC_LUC = os.path.join(dir_signature, 'etc', 'lulucf',
@@ -678,7 +679,7 @@ if __name__ == '__main__':
 
     overwrite = False
     # If set to False, will run on the cluster
-    run_local = True
+    run_local = False
 
     # If the  SOC sample data should not be retrieved
     #  anymore set this to false
@@ -689,13 +690,13 @@ if __name__ == '__main__':
     # Please ensure that first the retrieval
     # of the data per kernel is finished
 
-    compile_SOC_LUT = False
+    compile_SOC_LUT = True
 
     # Set to True if want to run assessment
     # on the impact of the three selected
     # stratification layers on SOC
 
-    assess_impact_lyrs_SOC = False
+    assess_impact_lyrs_SOC = True
 
     # The final step is to create a from to
     # conversion table that expresses the
