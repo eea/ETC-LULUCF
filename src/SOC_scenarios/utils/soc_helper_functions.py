@@ -676,16 +676,59 @@ def create_SOC_scenario_layer(settings):
 
 
 def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_factor: str,
-                          id_LUT_carbon_pool: str = 'SOC') -> dict:
-    folder = settings.get(f'{id_LUT_carbon_pool}_NUTS_factors_folder')
+                          id_LUT_carbon_pool: str = 'SOC', LU_specific=True,
+                          folder=None) -> dict:
+
+    if folder is None:
+        folder = settings.get(f'{id_LUT_carbon_pool}_NUTS_factors_folder')
     NUTS_info = settings.get('NUTS3_info')
 
     dict_scenario = {}
-    for crop in dict_default_scenario.keys():
+
+    # if different factors according to LU
+    if LU_specific:
+        for crop in dict_default_scenario.keys():
+            file_dir_NUTS3 = os.path.join(
+                folder, f'NUTS_LEVEL3_{id_LUT_carbon_pool}_scenarios_{crop.lower()}.txt')
+            file_dir_NUTS0 = os.path.join(
+                folder, f'NUTS_LEVEL0_{id_LUT_carbon_pool}_scenarios_{crop.lower()}.txt')
+
+            df_NUTS3 = pd.read_csv(file_dir_NUTS3, sep='\t')
+            df_NUTS0 = pd.read_csv(file_dir_NUTS0, sep='\t')
+
+            factor_NUTS3 = df_NUTS3.loc[df_NUTS3['NUTS_LEVEL3_ID']
+                                        == NUTS_info.NUTS_ID][type_factor].values[0]
+
+            # if factor is not defined at NUTS3 level check if it is at NUTS0 LEVEL
+            if pd.isnull(factor_NUTS3):
+                factor_NUTS0 = df_NUTS0.loc[df_NUTS0['NUTS_LEVEL0_ID']
+                                            == NUTS_info.CNTR_CODE][type_factor].values[0]
+
+                if pd.isnull(factor_NUTS0):
+                    dict_scenario.update({crop: {type_factor: dict_default_scenario.get(crop).get(type_factor),
+                                                 'input_source': 'EEA39'}})
+                else:
+                    # check if can convert to integer:
+                    try:
+                        factor_NUTS0 = int(factor_NUTS0)
+                    except:
+                        factor_NUTS0 = factor_NUTS0
+                    dict_scenario.update({crop: {type_factor: factor_NUTS0,
+                                                 'input_source': 'NUTS0'}})
+            else:
+                # check if can convert to integer:
+                try:
+                    factor_NUTS3 = int(factor_NUTS3)
+                except:
+                    factor_NUTS3 = factor_NUTS3
+                dict_scenario.update({crop: {type_factor: factor_NUTS3,
+                                             'input_source': 'NUTS3'}})
+
+    else:
         file_dir_NUTS3 = os.path.join(
-            folder, f'NUTS_LEVEL3_{id_LUT_carbon_pool}_scenarios_{crop.lower()}.txt')
+            folder, f'NUTS_LEVEL3_{id_LUT_carbon_pool}_scenarios.txt')
         file_dir_NUTS0 = os.path.join(
-            folder, f'NUTS_LEVEL0_{id_LUT_carbon_pool}_scenarios_{crop.lower()}.txt')
+            folder, f'NUTS_LEVEL0_{id_LUT_carbon_pool}_scenarios.txt')
 
         df_NUTS3 = pd.read_csv(file_dir_NUTS3, sep='\t')
         df_NUTS0 = pd.read_csv(file_dir_NUTS0, sep='\t')
@@ -699,25 +742,24 @@ def get_factors_from_NUTS(settings: dict, dict_default_scenario: dict, type_fact
                                         == NUTS_info.CNTR_CODE][type_factor].values[0]
 
             if pd.isnull(factor_NUTS0):
-                dict_scenario.update({crop: {type_factor: dict_default_scenario.get(crop).get(type_factor),
-                                             'input_source': 'EEA39'}})
+                dict_scenario.update({type_factor: dict_default_scenario.get(type_factor),
+                                      'input_source': 'EEA39'})
             else:
                 # check if can convert to integer:
                 try:
                     factor_NUTS0 = int(factor_NUTS0)
                 except:
                     factor_NUTS0 = factor_NUTS0
-                dict_scenario.update({crop: {type_factor: factor_NUTS0,
-                                             'input_source': 'NUTS0'}})
+                dict_scenario.update({type_factor: factor_NUTS0,
+                                      'input_source': 'NUTS0'})
         else:
             # check if can convert to integer:
             try:
                 factor_NUTS3 = int(factor_NUTS3)
             except:
                 factor_NUTS3 = factor_NUTS3
-            dict_scenario.update({crop: {type_factor: factor_NUTS3,
-                                         'input_source': 'NUTS3'}})
-
+            dict_scenario.update({type_factor: factor_NUTS3,
+                                 'input_source': 'NUTS3'})
     return dict_scenario
 
 
@@ -985,7 +1027,8 @@ def rescale_raster(raster_file, outdir, rescale_factor):
     return os.path.join(outdir, outname)
 
 
-def add_atrributes_stats(spatial_layer: gpd, level_NUTS_focus=None, spatial_resolution: int = 100) -> gpd:
+def add_atrributes_stats(spatial_layer: gpd, level_NUTS_focus=None,
+                         spatial_resolution: int = 100) -> gpd:
     """
     Function that will insert some additional columns that could be used for the interpretation or analysis
     of the SOC stats.
@@ -1123,44 +1166,44 @@ def calc_weighted_average_NUTS(df_stats_NUTS_small: pd.DataFrame, NUTS_layer: gp
 
     # calc now the weighted average per unique NUTS region
 
-    # save the stats of the big NUTS area in a list and merge it together with the stats of the smaller NUTS areas
+    # save the stats of the big NUTS area in a list and merge
+    # it together with the stats of the smaller NUTS areas
     lst_stats_all_NUTS = []
     for NUTS_big_region in df_NUTS3_matched[f'NUTS_region_LEVEL{str(level_focus)}'].unique():
-        for IPCC_cat in df_stats_NUTS_small['IPCC_cat'].unique():
-            # derive weight per subarea for the calculation
-            df_NUTS3_matched_filter = df_NUTS3_matched\
-                .loc[((df_NUTS3_matched[f'NUTS_region_LEVEL{str(level_focus)}'] == NUTS_big_region)
-                      & (df_NUTS3_matched['IPCC_cat'] == IPCC_cat))]
-            if df_NUTS3_matched_filter.empty:
-                continue
+        # derive weight per subarea for the calculation
+        df_NUTS3_matched_filter = df_NUTS3_matched\
+            .loc[((df_NUTS3_matched[f'NUTS_region_LEVEL{str(level_focus)}'] == NUTS_big_region))]
+        if df_NUTS3_matched_filter.empty:
+            continue
 
-            df_NUTS3_matched_filter = df_NUTS3_matched_filter.fillna(0)
-            tot_pixel = df_NUTS3_matched_filter['nr_pixels'].sum()
-            df_NUTS3_matched_filter['weight'] = df_NUTS3_matched_filter['nr_pixels'] / tot_pixel
-            # now define the columns for which the weighted average should be taken
-            columns_df = list(df_NUTS3_matched_filter.columns.values)
-            # only the columns for which the mean is taken will be used for the weighted average
-            columns_df_filtered = [
-                item for item in columns_df if 'mean' in item or 'total' in item]
+        df_NUTS3_matched_filter = df_NUTS3_matched_filter.fillna(0)
+        tot_pixel = df_NUTS3_matched_filter['nr_pixels'].sum()
+        df_NUTS3_matched_filter['weight'] = df_NUTS3_matched_filter['nr_pixels'] / tot_pixel
+        # now define the columns for which the
+        # weighted average should be taken
+        columns_df = list(df_NUTS3_matched_filter.columns.values)
+        # only the columns for which the mean is taken will
+        # be used for the weighted average
+        columns_df_filtered = [
+            item for item in columns_df if 'mean' in item or 'total' in item]
 
-            lst_value_big_NUTS_region = []
-            for column in columns_df_filtered:
-                if 'mean' in column:
-                    value_NUTS_region = (df_NUTS3_matched_filter.loc[df_NUTS3_matched_filter[column] != 0]['weight']
-                                         * df_NUTS3_matched_filter[column]).mean()
-                else:
-                    value_NUTS_region = df_NUTS3_matched_filter[column].sum()
-                lst_value_big_NUTS_region.append(value_NUTS_region)
+        lst_value_big_NUTS_region = []
+        for column in columns_df_filtered:
+            if 'mean' in column:
+                value_NUTS_region = (df_NUTS3_matched_filter.loc[df_NUTS3_matched_filter[column] != 0]['weight']
+                                     * df_NUTS3_matched_filter[column]).mean()
+            else:
+                value_NUTS_region = df_NUTS3_matched_filter[column].sum()
+            lst_value_big_NUTS_region.append(value_NUTS_region)
 
-            df_stats_NUTS_region = pd.DataFrame(lst_value_big_NUTS_region).T
-            df_stats_NUTS_region.columns = columns_df_filtered
-            df_stats_NUTS_region['nr_pixels'] = [tot_pixel]
-            df_stats_NUTS_region['IPCC_cat'] = [IPCC_cat]
-            df_stats_NUTS_region['NUTS_LEVEL'] = [str(level_focus)]
-            df_stats_NUTS_region['NUTS_ID'] = [NUTS_big_region]
-            df_stats_NUTS_region['geometry'] = [
-                NUTS_layer.loc[NUTS_layer.NUTS_ID == NUTS_big_region].geometry.values[0]]
-            lst_stats_all_NUTS.append(df_stats_NUTS_region)
+        df_stats_NUTS_region = pd.DataFrame(lst_value_big_NUTS_region).T
+        df_stats_NUTS_region.columns = columns_df_filtered
+        df_stats_NUTS_region['nr_pixels'] = [tot_pixel]
+        df_stats_NUTS_region['NUTS_LEVEL'] = [str(level_focus)]
+        df_stats_NUTS_region['NUTS_ID'] = [NUTS_big_region]
+        df_stats_NUTS_region['geometry'] = [
+            NUTS_layer.loc[NUTS_layer.NUTS_ID == NUTS_big_region].geometry.values[0]]
+        lst_stats_all_NUTS.append(df_stats_NUTS_region)
 
     df_stats_big_NUTS_region = pd.concat(lst_stats_all_NUTS)
 
