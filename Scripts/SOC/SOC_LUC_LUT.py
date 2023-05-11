@@ -221,26 +221,66 @@ def create_df_strata(lst_comb, cols, type_column=None):
     return df_strata
 
 
-def plot_cdf(dict_CDF, outfolder_hist, outname, param_asses):
+def plot_cdf(dict_CDF, outfolder_hist,
+             outname, param_asses,
+             merge=True):
     fig, (ax1) = plt.subplots(nrows=1, ncols=1, figsize=(15, 10))
 
-    options_plotting = list(dict_CDF.keys())
-    options_plotting = [item for item in options_plotting if 'cdf' in item]
-    colors = mcolors.CSS4_COLORS
-    random.seed(4)
-    keys_colors = list(colors.keys())
-    keys_colors = [item for item in keys_colors if not 'white' in item]
-    random.shuffle(keys_colors)
+    if merge:
+        options_plotting = list(dict_CDF.keys())
+        options_plotting = [item for item in options_plotting if 'cdf' in item]
+        options_plotting = sorted(options_plotting)
+        colors = mcolors.CSS4_COLORS
+        random.seed(4)
+        keys_colors = list(colors.keys())
+        keys_colors = [item for item in keys_colors if not 'white' in item]
+        random.shuffle(keys_colors)
 
-    for option in options_plotting:
-        ix = options_plotting.index(option)
-        color = keys_colors[ix]
-        data = dict_CDF.get(option)
-        label = option.split('_cdf')[0]
+        for option in options_plotting:
+            ix = options_plotting.index(option)
+            color = keys_colors[ix]
+            data = dict_CDF.get(option)
+            label = option.split('_cdf')[0]
 
-        ax1.plot(dict_CDF.get(f'{label}_bins')[1:], data,
-                 label=label, color=color,
-                 linewidth=5)
+            ax1.plot(dict_CDF.get(f'{label}_bins')[1:], data,
+                     label=label, color=color,
+                     linewidth=5)
+    else:
+        options_plotting = [item for item in list(
+            dict_CDF.keys()) if 'cdf' in item]
+        options_plotting = list(set(['_'.join(item.split('_')[:-2])
+                                for item in options_plotting]))
+        options_plotting = sorted(options_plotting)
+
+        colors = mcolors.CSS4_COLORS
+        random.seed(4)
+        keys_colors = list(colors.keys())
+        keys_colors = [item for item in keys_colors if not 'white' in item]
+        random.shuffle(keys_colors)
+
+        for option in options_plotting:
+            ix = options_plotting.index(option)
+            color = keys_colors[ix]
+
+            keys_option = [item for item in dict_CDF.keys(
+            ) if option in item and 'cdf' in item]
+
+            idx_plot_option = 0
+            for key in keys_option:
+                data = dict_CDF.get(key)
+                label = key.split('_cdf')[0]
+
+                # only add the label for the first time the plotting is done
+                if idx_plot_option == 0:
+                    ax1.plot(dict_CDF.get(key.replace('cdf', 'bins'))[1:], data,
+                             label=label, color=color,
+                             linewidth=1)
+                else:
+                    ax1.plot(dict_CDF.get(key.replace('cdf', 'bins'))[1:], data,
+                             color=color,
+                             linewidth=1)
+
+                idx_plot_option += 1
 
     ax1.set_xlabel('SOC [ton/ha]', fontsize=27)
     ax1.set_xlim([0, 150])
@@ -298,6 +338,85 @@ def get_conversion_LUT_strata(df, to_class, stats_conv='median'):
     df_filter['SOC_seq'] = df_filter['to_SOC'] - df_filter['from_SOC']
     df_filter['nr_px_to'] = to_nr_px
     return df_filter
+
+
+def _cdf_strata(df_strata, dataset_options, dataset,
+                LEVEL_LUC, outfolder_CDF, lst_data,
+                data_folder, merge=True, overwrite=False):
+    """
+    Function that will plot the CDF of a certain class for 
+    a certain variable that has to be assessed. 
+
+    """
+    from loguru import logger as log
+
+    bins = np.arange(0, 150, 1)
+
+    dict_data_option_merged = {}
+    dict_data_option_unique = {}
+
+    outname_merged = f'{LEVEL_LUC}_{dataset}_IMPACT_SOC.png'
+    outname_unique = f'{LEVEL_LUC}_{dataset}_IMPACT_SOC_per_strata.png'
+
+    for option in dataset_options:
+        log.info(
+            f'LOADING ALL DATA FOR {option} {dataset_options.index(option)}/{len(dataset_options)}')
+
+        if not 'SLOPE' in dataset:
+            strata_IDs_option = list(
+                df_strata.loc[df_strata[f'{dataset}_CAT'] == option]
+                .STRATA_ID.values)
+        else:
+            strata_IDs_option = list(
+                df_strata.loc[df_strata[f'{dataset}_RANGE'] == option]
+                .STRATA_ID.values)
+
+        strata_IDs_option = [
+            f'{LEVEL_LUC}_STRATA_{str(item)}.npz' for item in strata_IDs_option]
+
+        # filter now on the files that should be loaded
+        lst_data_option = [os.path.join(
+            data_folder, item) for item in lst_data if item in strata_IDs_option]
+
+        if not lst_data_option:
+            continue
+
+        if merge:
+            # this part will merge the occurence of this
+            # option across the different strata
+            if os.path.exists(os.path.join(outfolder_CDF, outname_merged)) and not overwrite:
+                return
+
+            data_option = np.concatenate([np.load(item)['data']
+                                          for item in lst_data_option])
+
+            cdf, bins_image = get_cdf(data_option, bins)
+
+            dict_data_option_merged.update({f'{option}_or': data_option,
+                                            f'{option}_cdf': cdf,
+                                            f'{option}_bins': bins_image})
+        else:
+            # this option will threat the values for each option
+            # across the other class layers separately
+            if os.path.exists(os.path.join(outfolder_CDF, outname_unique)) and not overwrite:
+                return
+            for data in lst_data_option:
+                idx_run = lst_data_option.index(data)
+                npz_data = np.load(data)['data']
+                cdf, bins_image = get_cdf(npz_data,
+                                          bins)
+                dict_data_option_unique.update({f'{option}_or_{str(idx_run)}': npz_data,
+                                                f'{option}_cdf_{str(idx_run)}': cdf,
+                                                f'{option}_bins_{str(idx_run)}': bins_image})
+
+    if merge:
+        # plot the CDF of the specific assessed options
+        plot_cdf(dict_data_option_merged,
+                 outfolder_CDF, outname_merged, dataset)
+    else:
+        plot_cdf(dict_data_option_unique,
+                 outfolder_CDF, outname_unique,
+                 dataset, merge=False)
 
 
 def main_SOC_analysis(settings, sql=None):
@@ -545,8 +664,6 @@ def main_SOC_analysis(settings, sql=None):
 
         LEVEL_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
 
-        bins = np.arange(0, 150, 1)
-
         for dataset in DATASETS:
 
             log.info(f'ASSESSING IMPACT FOR DATASET {dataset}')
@@ -566,43 +683,19 @@ def main_SOC_analysis(settings, sql=None):
                 dataset_options = list(
                     df_full_stratification[f'{dataset}_RANGE'].unique())
 
-            dict_data_option = {}
+            # first do it when merging all the strata
+            # where a certain class occur
+            _cdf_strata(df_full_stratification, dataset_options,
+                        dataset, LEVEL_LUC, outfolder_cdf,
+                        lst_data, data_folder,
+                        overwrite=overwrite)
 
-            for option in dataset_options:
-                log.info(
-                    f'LOADING ALL DATA FOR {option} {dataset_options.index(option)}/{len(dataset_options)}')
-
-                if not 'SLOPE' in dataset:
-                    strata_IDs_option = list(
-                        df_full_stratification.loc[df_full_stratification[f'{dataset}_CAT'] == option]
-                        .STRATA_ID.values)
-                else:
-                    strata_IDs_option = list(
-                        df_full_stratification.loc[df_full_stratification[f'{dataset}_RANGE'] == option]
-                        .STRATA_ID.values)
-
-                strata_IDs_option = [
-                    f'{LEVEL_LUC}_STRATA_{str(item)}.npz' for item in strata_IDs_option]
-
-                # filter now on the files that should be loaded
-                lst_data_option = [os.path.join(
-                    data_folder, item) for item in lst_data if item in strata_IDs_option]
-
-                if not lst_data_option:
-                    continue
-
-                data_option = np.concatenate([np.load(item)['data']
-                                              for item in lst_data_option])
-
-                cdf, bins_image = get_cdf(data_option, bins)
-
-                dict_data_option.update({f'{option}_or': data_option,
-                                         f'{option}_cdf': cdf,
-                                         f'{option}_bins': bins_image})
-
-            # plot the CDF of the specific assessed options
-            outname = f'{LEVEL_LUC}_{dataset}_IMPACT_SOC.png'
-            plot_cdf(dict_data_option, outfolder_cdf, outname, dataset)
+            # Plot the CDF for each strata
+            # where the specific class occurs seperately
+            _cdf_strata(df_full_stratification, dataset_options,
+                        dataset, LEVEL_LUC, outfolder_cdf,
+                        lst_data, data_folder,
+                        overwrite=overwrite, merge=False)
 
     if settings.get('Conversion_table'):
         log.info('Start creating conversion table')
@@ -671,7 +764,7 @@ if __name__ == '__main__':
 
     # Below define level of IPCC CLC crosswalk table
     # Current options: 'LULUCF' & 'SOC_classif'
-    Level_crosswalk = 'LULUCF'
+    Level_crosswalk = 'SOC_classif'
 
     # Define the output folder where the statistics will be stored
     outfolder_SOC_LUC = os.path.join(dir_signature, 'etc', 'lulucf',
