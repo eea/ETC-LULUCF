@@ -120,9 +120,12 @@ def _get_LUT_strata(strata, lst_data,
     outname_hist = f'HIST_{LEVEL_LUC}_STRATA_{strata}.png'
     strata_meta = df_strata_info.loc[df_strata_info.STRATA_ID == strata]
     ENV_ZONE = strata_meta['ENV_CAT'].values[0]
-    SLOPE_ZONE = strata_meta['SLOPE_RANGE'].values[0]
+    # TODO ETC DI ADD SOIL TYPE INFO
+    #SLOPE_ZONE = strata_meta['SLOPE_RANGE'].values[0]
     LUC_CAT = strata_meta['LU_CAT'].values[0]
-    title_str = f'ENV_{ENV_ZONE}_SLOPE_{SLOPE_ZONE}_LU_{LUC_CAT}'
+    #TODO ADD SOIL TYPE INFO IN NAMING OF OUTPUT
+    #title_str = f'ENV_{ENV_ZONE}_SLOPE_{SLOPE_ZONE}_LU_{LUC_CAT}'
+    title_str = f'ENV_{ENV_ZONE}_LU_{LUC_CAT}'
 
     create_hist(data_strata, dict_printing_hist,
                 outname_hist, settings.get('outfolder_hist'),
@@ -221,26 +224,66 @@ def create_df_strata(lst_comb, cols, type_column=None):
     return df_strata
 
 
-def plot_cdf(dict_CDF, outfolder_hist, outname, param_asses):
+def plot_cdf(dict_CDF, outfolder_hist,
+             outname, param_asses,
+             merge=True):
     fig, (ax1) = plt.subplots(nrows=1, ncols=1, figsize=(15, 10))
 
-    options_plotting = list(dict_CDF.keys())
-    options_plotting = [item for item in options_plotting if 'cdf' in item]
-    colors = mcolors.CSS4_COLORS
-    random.seed(4)
-    keys_colors = list(colors.keys())
-    keys_colors = [item for item in keys_colors if not 'white' in item]
-    random.shuffle(keys_colors)
+    if merge:
+        options_plotting = list(dict_CDF.keys())
+        options_plotting = [item for item in options_plotting if 'cdf' in item]
+        options_plotting = sorted(options_plotting)
+        colors = mcolors.CSS4_COLORS
+        random.seed(4)
+        keys_colors = list(colors.keys())
+        keys_colors = [item for item in keys_colors if not 'white' in item]
+        random.shuffle(keys_colors)
 
-    for option in options_plotting:
-        ix = options_plotting.index(option)
-        color = keys_colors[ix]
-        data = dict_CDF.get(option)
-        label = option.split('_cdf')[0]
+        for option in options_plotting:
+            ix = options_plotting.index(option)
+            color = keys_colors[ix]
+            data = dict_CDF.get(option)
+            label = option.split('_cdf')[0]
 
-        ax1.plot(dict_CDF.get(f'{label}_bins')[1:], data,
-                 label=label, color=color,
-                 linewidth=5)
+            ax1.plot(dict_CDF.get(f'{label}_bins')[1:], data,
+                     label=label, color=color,
+                     linewidth=5)
+    else:
+        options_plotting = [item for item in list(
+            dict_CDF.keys()) if 'cdf' in item]
+        options_plotting = list(set(['_'.join(item.split('_')[:-2])
+                                for item in options_plotting]))
+        options_plotting = sorted(options_plotting)
+
+        colors = mcolors.CSS4_COLORS
+        random.seed(4)
+        keys_colors = list(colors.keys())
+        keys_colors = [item for item in keys_colors if not 'white' in item]
+        random.shuffle(keys_colors)
+
+        for option in options_plotting:
+            ix = options_plotting.index(option)
+            color = keys_colors[ix]
+
+            keys_option = [item for item in dict_CDF.keys(
+            ) if option in item and 'cdf' in item]
+
+            idx_plot_option = 0
+            for key in keys_option:
+                data = dict_CDF.get(key)
+                label = key.split('_cdf')[0]
+
+                # only add the label for the first time the plotting is done
+                if idx_plot_option == 0:
+                    ax1.plot(dict_CDF.get(key.replace('cdf', 'bins'))[1:], data,
+                             label=label, color=color,
+                             linewidth=1)
+                else:
+                    ax1.plot(dict_CDF.get(key.replace('cdf', 'bins'))[1:], data,
+                             color=color,
+                             linewidth=1)
+
+                idx_plot_option += 1
 
     ax1.set_xlabel('SOC [ton/ha]', fontsize=27)
     ax1.set_xlim([0, 150])
@@ -267,37 +310,178 @@ def get_cdf(data, bins):
     return cdf, bins_image
 
 
-def get_conversion_LUT_strata(df, to_class, stats_conv='median'):
+def get_conversion_LUT_strata(df, to_class_NAME, 
+                              settings,
+                              df_LDN_info = None,
+                              stats_conv='median', 
+                              add_LDN=False):
+    
+    #add_LDN specifies if the land cover flow should be 
+    # linked with the land degradation work of ETC DI"
+
+
     # create dataframe that provides an
     # overview of the LUC impact
 
     # check if the LUC to convert to is
     # available in the specific checked strata
-    if not to_class in list(df.LU_CAT.unique()):
+    if not to_class_NAME in list(df.LU_CAT.unique()):
         return pd.DataFrame()
 
-    to_pool_tot = df.loc[df.LU_CAT == to_class][f'{stats_conv}_SOC'].values[0]
-    to_pool_unc = df.loc[df.LU_CAT == to_class]['stdv_SOC'].values[0]
-    to_nr_px = df.loc[df.LU_CAT == to_class]['nr_px'].values[0]
+    to_pool_tot = df.loc[df.LU_CAT == to_class_NAME][f'{stats_conv}_SOC'].values[0]
+    to_pool_unc = df.loc[df.LU_CAT == to_class_NAME]['stdv_SOC'].values[0]
+    to_nr_px = df.loc[df.LU_CAT == to_class_NAME]['nr_px'].values[0]
 
-    # only consider applicabale LUC conversions
+    # only consider applicable LUC conversions
 
-    df_filter = df.loc[df.LU_CAT != to_class]
+    df_filter = df.loc[df.LU_CAT != to_class_NAME]
 
     df_filter = df_filter.rename(columns={'LU_CAT': 'from_LU_cat',
                                           f'{stats_conv}_SOC': 'from_SOC',
                                           'stdv_SOC': 'from_SOC_stdv',
                                           'nr_px': 'nr_px_from'})
-    df_filter = df_filter[['from_LU_cat', 'from_SOC',
-                           'from_SOC_stdv', 'STRATA_ID',
-                           'SLOPE_CAT', 'ENV_CAT', 'SLOPE_RANGE',
-                           'ENV_RANGE', 'nr_px_from']]
-    df_filter['to_LU_cat'] = to_class
+    
+    if add_LDN:
+        lst_LDN_added = []
+        cols_LDN = ['LD_name_level1', 
+                    'LD_Improving_C',
+                    'LD_Improving_BD',
+                    'LD_C',
+                    'LD_Biodiversity']
+
+        for i, df_LUC in df_filter.iterrows():
+            # define the origin CLC Level-3 class(es)
+            from_classes = literal_eval(df_LUC['LU_RANGE'])
+            # define the to CLC Level-3 class(es)
+            to_classes = literal_eval(df.loc[df.LU_CAT == to_class_NAME]['LU_RANGE'].values[0])
+
+            # now find match in LDN table
+
+            # some of the CLC classes are grouped 
+            # so it should be checked which is the dominant
+            # LDN naming that is used for this group
+            lst_LDN_grouping = []
+            for from_class in from_classes:
+                for to_class in to_classes:
+                    row_LDN = df_LDN_info.loc[((df_LDN_info['CLC name (from)'].str.contains(str(from_class)))
+                                               &(df_LDN_info['CLC name (to)'].str.contains(str(to_class))))]
+                    if row_LDN.empty:
+                        continue
+                    else:
+                        lst_LDN_grouping.append(row_LDN[cols_LDN])
+            if lst_LDN_grouping:
+                # put into right format to 
+                # allow addition of LDN info
+                df_LUC_reformat  = pd.DataFrame(df_LUC).T
+                df_overview_LDN_grouping = pd.concat(lst_LDN_grouping)
+                # take the mode (dominant attribution) along the rows
+                if df_overview_LDN_grouping.shape[0] > 2:
+                    df_overview_LDN_grouping = df_overview_LDN_grouping.mode(axis=0)
+                else:
+                    df_overview_LDN_grouping = pd.DataFrame(df_overview_LDN_grouping.iloc[0]).T
+                df_overview_LDN_grouping = df_overview_LDN_grouping.reset_index(drop=True)
+                if df_overview_LDN_grouping.shape[0] > 1:
+                    df_overview_LDN_grouping = pd.DataFrame(df_overview_LDN_grouping.iloc[0]).T
+                df_overview_LDN_grouping.index = df_LUC_reformat.index
+        
+                lst_LDN_added.append(pd.concat([df_LUC_reformat, df_overview_LDN_grouping]
+                                               , axis=1))
+        df_filter = pd.concat(lst_LDN_added)
+        cols_retain = ['from_LU_cat', 'from_SOC',
+                            'from_SOC_stdv', 'STRATA_ID',
+                            'ENV_CAT','ENV_RANGE', 'nr_px_from'] + cols_LDN
+        df_filter = df_filter[cols_retain]
+    else:
+        # TODO ETC DI FILTER ON SOIL TYPE COLUMN TOO
+        df_filter = df_filter[['from_LU_cat', 'from_SOC',
+                            'from_SOC_stdv', 'STRATA_ID',
+                            'ENV_CAT','ENV_RANGE', 'nr_px_from']]
+    df_filter['to_LU_cat'] = to_class_NAME
     df_filter['to_SOC'] = to_pool_tot
     df_filter['to_SOC_stdv'] = to_pool_unc
     df_filter['SOC_seq'] = df_filter['to_SOC'] - df_filter['from_SOC']
     df_filter['nr_px_to'] = to_nr_px
+
     return df_filter
+
+
+def _cdf_strata(df_strata, dataset_options, dataset,
+                LEVEL_LUC, outfolder_CDF, lst_data,
+                data_folder, merge=True, overwrite=False):
+    """
+    Function that will plot the CDF of a certain class for 
+    a certain variable that has to be assessed. 
+
+    """
+    from loguru import logger as log
+
+    bins = np.arange(0, 150, 1)
+
+    dict_data_option_merged = {}
+    dict_data_option_unique = {}
+
+    outname_merged = f'{LEVEL_LUC}_{dataset}_IMPACT_SOC.png'
+    outname_unique = f'{LEVEL_LUC}_{dataset}_IMPACT_SOC_per_strata.png'
+
+    for option in dataset_options:
+        log.info(
+            f'LOADING ALL DATA FOR {option} {dataset_options.index(option)}/{len(dataset_options)}')
+
+        if not 'SLOPE' in dataset:
+            strata_IDs_option = list(
+                df_strata.loc[df_strata[f'{dataset}_CAT'] == option]
+                .STRATA_ID.values)
+        else:
+            strata_IDs_option = list(
+                df_strata.loc[df_strata[f'{dataset}_RANGE'] == option]
+                .STRATA_ID.values)
+
+        strata_IDs_option = [
+            f'{LEVEL_LUC}_STRATA_{str(item)}.npz' for item in strata_IDs_option]
+
+        # filter now on the files that should be loaded
+        lst_data_option = [os.path.join(
+            data_folder, item) for item in lst_data if item in strata_IDs_option]
+
+        if not lst_data_option:
+            continue
+
+        if merge:
+            # this part will merge the occurence of this
+            # option across the different strata
+            if os.path.exists(os.path.join(outfolder_CDF, outname_merged)) and not overwrite:
+                return
+
+            data_option = np.concatenate([np.load(item)['data']
+                                          for item in lst_data_option])
+
+            cdf, bins_image = get_cdf(data_option, bins)
+
+            dict_data_option_merged.update({f'{option}_or': data_option,
+                                            f'{option}_cdf': cdf,
+                                            f'{option}_bins': bins_image})
+        else:
+            # this option will threat the values for each option
+            # across the other class layers separately
+            if os.path.exists(os.path.join(outfolder_CDF, outname_unique)) and not overwrite:
+                return
+            for data in lst_data_option:
+                idx_run = lst_data_option.index(data)
+                npz_data = np.load(data)['data']
+                cdf, bins_image = get_cdf(npz_data,
+                                          bins)
+                dict_data_option_unique.update({f'{option}_or_{str(idx_run)}': npz_data,
+                                                f'{option}_cdf_{str(idx_run)}': cdf,
+                                                f'{option}_bins_{str(idx_run)}': bins_image})
+
+    if merge:
+        # plot the CDF of the specific assessed options
+        plot_cdf(dict_data_option_merged,
+                 outfolder_CDF, outname_merged, dataset)
+    else:
+        plot_cdf(dict_data_option_unique,
+                 outfolder_CDF, outname_unique,
+                 dataset, merge=False)
 
 
 def main_SOC_analysis(settings, sql=None):
@@ -311,17 +495,18 @@ def main_SOC_analysis(settings, sql=None):
         log.info(
             f'{os.path.join(settings.get("outfolder"), "stratification", outname)} does not exist')  # NOQA
 
-        # 1 DEM SLOPE
-        SLOPE_CAT = list(settings.get('Slope_classes').keys())
-        SLOPE_RANGE = [settings.get('Slope_classes').get(item)
-                       for item in SLOPE_CAT]
+        # # 1 DEM SLOPE
+        # SLOPE_CAT = list(settings.get('Slope_classes').keys())
+        # SLOPE_RANGE = [settings.get('Slope_classes').get(item)
+        #                for item in SLOPE_CAT]
+
+        # 1 TODO ETC DI Add soil type classification
 
         # 2 Environmental zones:
         ENV_CAT = list(settings.get('Env_zones_mapping').keys())
         ENV_RANGE = [settings.get('Env_zones_mapping').get(item)
                      for item in ENV_CAT]
         # Translation table env classes
-
         # 3 IPCC LULUCF classes based on CLC
         LUC_CAT = list(settings.get('CLC_cross_walk').get(
             f'LEVEL_{str(Level_LUC)}').keys())
@@ -329,17 +514,19 @@ def main_SOC_analysis(settings, sql=None):
             f'LEVEL_{str(Level_LUC)}').get(item) for item in LUC_CAT]
 
         # Get now a list of all possible combinations for stratification
-        All_combinations_CAT = list(product(SLOPE_CAT, ENV_CAT, LUC_CAT))
+        All_combinations_CAT = list(product(ENV_CAT, LUC_CAT))
         All_combinations_RANGE = list(
-            product(SLOPE_RANGE, ENV_RANGE, LUC_RANGE))
+            product(ENV_RANGE, LUC_RANGE))
 
         # Now turn both list to a pandas dataframe where the ID of the strata will be defined
         # This ID will be used to join both lists together to obtain a full dataframe expressing
         # the entire defined stratification
+
+        # TODO ETC DI add SOIL TYPE CAT AND INFORMATION TO STRATIFICATION TABLE
         df_all_range = create_df_strata(All_combinations_RANGE, [
-            'SLOPE_RANGE', 'ENV_RANGE', 'LU_RANGE'])
+            'ENV_RANGE', 'LU_RANGE'])
         df_all_cat = create_df_strata(
-            All_combinations_CAT, ['SLOPE_CAT', 'ENV_CAT', 'LU_CAT'])
+            All_combinations_CAT, ['ENV_CAT', 'LU_CAT'])
 
         df_full_stratification = pd.merge(
             df_all_cat, df_all_range, on='STRATA_ID')
@@ -545,8 +732,6 @@ def main_SOC_analysis(settings, sql=None):
 
         LEVEL_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
 
-        bins = np.arange(0, 150, 1)
-
         for dataset in DATASETS:
 
             log.info(f'ASSESSING IMPACT FOR DATASET {dataset}')
@@ -566,43 +751,19 @@ def main_SOC_analysis(settings, sql=None):
                 dataset_options = list(
                     df_full_stratification[f'{dataset}_RANGE'].unique())
 
-            dict_data_option = {}
+            # first do it when merging all the strata
+            # where a certain class occur
+            _cdf_strata(df_full_stratification, dataset_options,
+                        dataset, LEVEL_LUC, outfolder_cdf,
+                        lst_data, data_folder,
+                        overwrite=overwrite)
 
-            for option in dataset_options:
-                log.info(
-                    f'LOADING ALL DATA FOR {option} {dataset_options.index(option)}/{len(dataset_options)}')
-
-                if not 'SLOPE' in dataset:
-                    strata_IDs_option = list(
-                        df_full_stratification.loc[df_full_stratification[f'{dataset}_CAT'] == option]
-                        .STRATA_ID.values)
-                else:
-                    strata_IDs_option = list(
-                        df_full_stratification.loc[df_full_stratification[f'{dataset}_RANGE'] == option]
-                        .STRATA_ID.values)
-
-                strata_IDs_option = [
-                    f'{LEVEL_LUC}_STRATA_{str(item)}.npz' for item in strata_IDs_option]
-
-                # filter now on the files that should be loaded
-                lst_data_option = [os.path.join(
-                    data_folder, item) for item in lst_data if item in strata_IDs_option]
-
-                if not lst_data_option:
-                    continue
-
-                data_option = np.concatenate([np.load(item)['data']
-                                              for item in lst_data_option])
-
-                cdf, bins_image = get_cdf(data_option, bins)
-
-                dict_data_option.update({f'{option}_or': data_option,
-                                         f'{option}_cdf': cdf,
-                                         f'{option}_bins': bins_image})
-
-            # plot the CDF of the specific assessed options
-            outname = f'{LEVEL_LUC}_{dataset}_IMPACT_SOC.png'
-            plot_cdf(dict_data_option, outfolder_cdf, outname, dataset)
+            # Plot the CDF for each strata
+            # where the specific class occurs seperately
+            _cdf_strata(df_full_stratification, dataset_options,
+                        dataset, LEVEL_LUC, outfolder_cdf,
+                        lst_data, data_folder,
+                        overwrite=overwrite, merge=False)
 
     if settings.get('Conversion_table'):
         log.info('Start creating conversion table')
@@ -621,6 +782,22 @@ def main_SOC_analysis(settings, sql=None):
             df_LUT = pd.read_csv(os.path.join(outfolder_LUT, outname_LUT))
             conversion_options = list(df_LUT.LU_CAT.unique())
 
+            if settings.get('add_LDN'):
+                lst_ancil = []
+                # loop over the ancillary datasets and concatenate
+
+                for anc_da in settings.get('ANCILLARY').keys():
+                    if 'IMPROV' in anc_da:
+                        sheet_name = 'LCF_improving'
+                    else:
+                        sheet_name = 'LCF_LD_degrading'
+                    df_anc = pd.read_excel(settings.get('ANCILLARY').get(anc_da),
+                                        sheet_name=sheet_name)
+                    lst_ancil.append(df_anc)
+                df_LDN_info = pd.concat(lst_ancil)
+            else:
+                df_LDN_info = None
+            
             lst_df_conv = []
 
             for to_LUC in conversion_options:
@@ -628,8 +805,12 @@ def main_SOC_analysis(settings, sql=None):
                 # to determine which will
                 # be the end SOC when applying a LUC
                 # in that strata
+                # TODO ETC DI GROUPBY SOIL CLASSES TOO
                 df_conv_table = df_LUT.groupby(
-                    ['ENV_CAT', 'SLOPE_RANGE']).apply(get_conversion_LUT_strata, to_LUC)
+                    ['ENV_CAT']).apply(get_conversion_LUT_strata, to_LUC,
+                                       settings,
+                                       df_LDN_info=df_LDN_info,
+                                       add_LDN=settings.get('add_LDN'))
                 df_conv_table = df_conv_table.reset_index(drop=True)
                 lst_df_conv.append(df_conv_table)
 
@@ -651,27 +832,49 @@ if __name__ == '__main__':
         Env_zones_mapping)
 
     # The DEM may not be set as the first dataset!!!!!
+
+    # TODO ETC DI ADD SOIL TYPE CLASSIFICATION LAYER
+    #'SLOPE':  os.path.join(dir_signature, 'etc', 'lulucf', 'refs', 'dem', 'DEM_slope_3035_100m_warped.tif'),
     DATASETS = {
         'ENV': os.path.join(dir_signature, 'etc', 'lulucf', 'input_data',
                             'EnvZones', 'eea_r_3035_100_m_EnvZ-Metzger_2020_v1_r00.tif'),
-        'SLOPE':  os.path.join(dir_signature, 'etc', 'lulucf', 'refs', 'dem', 'DEM_slope_3035_100m_warped.tif'),
+        
         'LU': os.path.join(dir_signature, 'input_data', 'general',
                            'CLCACC', 'CLC2018ACC_V2018_20.tif'),
         'SOC': os.path.join(dir_signature, 'etc', 'lulucf', 'refs', 'isric', 'ocs_0-30cm_mean_3035_100m.tif')
     }
 
-    # Below the slope categories are defined
-    # For stratification
+    # Below add some ancillary information 
+    # like the land degradation layers
 
-    SLOPE_CAT = {
-        'FLAT': [0, 5],
-        'MODERATE': [5, 20],
-        'STEEP': [20, 1000]
+    ANCILLARY = {
+        'LDN_IMPROV': os.path.join(dir_signature, 'etc', 'lulucf', 'strata',
+                                   'SOC_LUC', 'LDN',
+                                   'LDN_Improvement_220722.xlsx'),
+
+        'LDN_DEGR': os.path.join(dir_signature, 'etc', 'lulucf', 'strata',
+                                   'SOC_LUC', 'LDN',
+                                   'LDN_Degradation_0722.xlsx')
     }
+ 
+    "SLOPE WILL BE DISABLED"
+    # # Below the slope categories are defined
+    # # For stratification
+
+    # SLOPE_CAT = {
+    #     'FLAT': [0, 5],
+    #     'MODERATE': [5, 20],
+    #     'STEEP': [20, 1000]
+    # }
+
+    "SOIL TYPE CLASSIFICATION LAYER SHOULD BE INCLUDED"
+    "CREATE IN THAT CASE A DICTIONARY (AS DONE FOR CLC AND ENVIRONMENTAL ZONE)"
+    "THAT LINKS EACH CLASS TO A SOIL TYPE GROUP/CLASS"
+    # TODO ETC DI
 
     # Below define level of IPCC CLC crosswalk table
     # Current options: 'LULUCF' & 'SOC_classif'
-    Level_crosswalk = 'LULUCF'
+    Level_crosswalk = 'SOC_classif'
 
     # Define the output folder where the statistics will be stored
     outfolder_SOC_LUC = os.path.join(dir_signature, 'etc', 'lulucf',
@@ -704,19 +907,26 @@ if __name__ == '__main__':
 
     create_conversion_table = True
 
+    # specify if the land cover flow should be lined with 
+    # the land degradation work that defines per flow the 
+    # impact on biodiversity, carbon seq and harmonze the naming of the flow
+
+    add_LDN = True
+
     # CLC IPCC mapping refinement contains the cross-walk between CLC and IPCC
     # at two defined levels
 
     settings = {'DATASETS': DATASETS,
+                'ANCILLARY': ANCILLARY,
                 'CLC_cross_walk': CLC_IPCC_mapping_refinement,
                 'Kernel': 128,
                 'Level_LUC_classes': Level_crosswalk,
                 'Env_zones_mapping': Env_zones_mapping,
-                'Slope_classes': SLOPE_CAT,
                 'Retrieve_SOC_kernel': retrieve_SOC_strata_kernel,
                 'Compile_SOC_LUT': compile_SOC_LUT,
                 'Assessment_SOC': assess_impact_lyrs_SOC,
                 'Conversion_table': create_conversion_table,
+                'add_LDN': add_LDN,
                 'outfolder': outfolder_SOC_LUC,
                 'overwrite': overwrite}
 
