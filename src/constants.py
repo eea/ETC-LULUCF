@@ -107,15 +107,12 @@ CLC_IPCC_mapping_refinement = {
 # Link each environmental zone value to a specific name
 Env_zones_mapping = {
     'Alpine_north': 1,
-    'Boreal': 2,
+    'Boreal_Alpine_South': [2, 5],
     'Nemoral': 3,
     'Atlantic_north': 4,
-    'Alpine_south': 5,
     'Continental': 6,
-    'Atlantic_central': 7,
-    'Pannonian': 8,
-    'Lusitanian': 9,
-    'Anatolian': 10,
+    'Atlantic_central_Lusitanian': [7, 9],
+    'Pannonian_Anatolian': [8, 10],
     'Mediterranean_mountains': 11,
     'Mediterranean_north': 12,
     'Mediterranean_south': 13,
