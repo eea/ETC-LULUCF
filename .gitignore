@@ -1,2 +1,4 @@
 /.log
 f02_data.lnk
+*/.ipynb_checkpoints/*
+*-checkpoint.ipynb
