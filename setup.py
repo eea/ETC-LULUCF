@@ -18,7 +18,7 @@ with open('src/_version.py') as fp:
 # Configure setuptools
 
 setup(
-    name='ETC-CCA-LULUCT',
+    name='src',
     version=__version__,
     author='Kasper Bonte',
     author_email='kasper.bonte@vito.be',

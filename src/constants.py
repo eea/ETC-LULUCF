@@ -5,11 +5,14 @@ and management options.
 
 import os
 import geopandas as gpd
+from pathlib import WindowsPath
 
 # Some default settings
 
 # the network drive name on which all the data is stored
-dir_signature = '/data/inca_vol1/'  # 'L:'
+# TODO adapt to work also on Unix-like systems
+dir_signature = WindowsPath('//cwsfileserver/projects/lulucf/f02_data/carbon_model_data')
+
 overwrite = False
 # folder which will be used for the output and in which all the LUT are stored
 Basefolder_strata = os.path.join(dir_signature, 'etc', 'lulucf', 'strata')
