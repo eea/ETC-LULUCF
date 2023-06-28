@@ -164,7 +164,7 @@ if __name__ == '__main__':
     peatland_id = 104
 
     # Define locations of raster based datasets
-
+    # TODO update folder locations
     DATASETS = {
         'LUC': os.path.join(dir_signature, 'input_data', 'general',
                             'CLCACC', 'CLC2018ACC_V2018_20.tif'),
