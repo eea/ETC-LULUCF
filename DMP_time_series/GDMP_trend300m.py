@@ -1,5 +1,5 @@
 import os
-from pathlib import Path
+from pathlib import Path, WindowsPath
 import xarray as xr
 import rioxarray as rio
 import pandas as pd
@@ -22,7 +22,8 @@ base1, base2: start and end of baseline period
 start_year = 2014
 end_year = 2021 # last year for which we have data
 
-base_path = Path(r'S:\Common workspace\ETC_DI\f03_JEDI_PREPARATION\f01_dims\DMPtime-series')
+base_path = WindowsPath('//cwsfileserver/projects/lulucf/f02_data')
+base_path = os.path.join(base_path, 'GDMP')
 base1 = 2014
 base2 = 2021
 
@@ -58,9 +59,9 @@ for aoi_name in list(aoi_bbox):
     #################################################################
     # select tiffs
     resolution = "1km" ### change this to point to the right folder
-    in_path = os.path.join(base_path, f'GDMP_{resolution}')
+    in_path = os.path.join(base_path, f'GDMP{resolution}')
 
-    out_path = os.path.join(base_path, f'GDMP_{resolution}_mk_{aoi_name}')
+    out_path = os.path.join(base_path, f'GDMP{resolution}_mk_{aoi_name}')
     if not os.path.exists(out_path):
         os.mkdir(out_path)
     #################################################################
@@ -68,9 +69,9 @@ for aoi_name in list(aoi_bbox):
 
     # load GDMP into xarray
     # tif_list = [f for f in os.listdir(in_path) if 'GDMP' in f]
-    tif_list = [os.path.basename(f) for f in glob.glob(in_path + '/GDMP_*.tif')]
+    tif_list = [os.path.basename(f) for f in glob.glob(in_path + '/clip_GDMP_*.tif')]
     # Create variable used for time axis
-    time_var = xr.Variable('time', pd.to_datetime([f'{fname[5:9]}-01-01' for fname in tif_list]))
+    time_var = xr.Variable('time', pd.to_datetime([f'{fname[5+5:9+5]}-01-01' for fname in tif_list]))
     # Load in and concatenate all individual GeoTIFFs
     gdmp_ds= xr.concat([xr.open_dataset(os.path.join(in_path, i), engine='rasterio').sel(y=slice(ymax, ymin), x=slice(xmin, xmax)) for i in tif_list], dim=time_var)
     # gdmp_ds= xr.concat([xr.open_dataset(os.path.join(in_path, i), engine='rasterio').sel(y=slice(ymin+10000, ymin), x=slice(xmin, xmin+10000)) for i in tif_list], dim=time_var)
