@@ -367,7 +367,7 @@ def create_affor_potential(settings, affor_mask_array):
 
             # Load the LUT with info on the EU4trees and the IPCC related volume increment
             df_trees_biom_increment = pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('Basefolder_output'),
-                                                               'NUTS_LUT_afforestation_scenario',
+                                                               'NUTS_LUT_afforestation_scenario', 'IPCC_data',
                                                                f'EU4_trees_LUT_biom_increment.csv'), sep=';')
 
             # store the info needed for creating output mask layer

@@ -72,7 +72,7 @@ def afforestation_LUT_block_proc(settings: dict):
 
     # filter only on the tree species for which we have an IPCC LUT
     LUT_tree_species = list(pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('Basefolder_output'),
-                                                     'NUTS_LUT_afforestation_scenario',
+                                                     'NUTS_LUT_afforestation_scenario', 'IPCC_data',
                                                      f'EU4_trees_LUT_biom_increment.csv'), sep=';').Tree_species)
     Prob_files_filtered = [item for item in Prob_files if Path(
         item).stem.split('_ens')[0] in LUT_tree_species]
@@ -322,7 +322,8 @@ if __name__ == '__main__':
 
     # define the folder with the needed LUT for NUTS specific parameter loading
     NUTS_LUT_factors_folder = os.path.join(
-        Basefolder_strata, 'NUTS_LUT_afforestation_scenario')
+        Basefolder_strata, 'NUTS_LUT_afforestation_scenario',
+        'IPCC_data')
 
     # define if the result might be overwritten
     overwrite = False

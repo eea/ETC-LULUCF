@@ -72,9 +72,9 @@ if LUT_FI:
 
 
 if LUT_RTS:
-    df1 = pd.read_csv(r"L:\etc\lulucf\strata\NUTS_LUT_afforestation_scenario\Ecological_zones_options.csv")
-    df2 = pd.read_csv(r"L:\etc\lulucf\strata\NUTS_LUT_afforestation_scenario\EU4_trees_options.csv")
-    df2 = pd.read_csv(r"L:\etc\lulucf\strata\NUTS_LUT_afforestation_scenario\EU4_trees_options.csv")
+    df1 = pd.read_csv(r"L:\etc\lulucf\strata\NUTS_LUT_afforestation_scenario\IPCC_data\Ecological_zones_options.csv")
+    df2 = pd.read_csv(r"L:\etc\lulucf\strata\NUTS_LUT_afforestation_scenario\IPCC_data\EU4_trees_options.csv")
+    df2 = pd.read_csv(r"L:\etc\lulucf\strata\NUTS_LUT_afforestation_scenario\IPCC_data\EU4_trees_options.csv")
     outdir = r'L:\etc\lulucf\strata\NUTS_LUT_afforestation_scenario'
     outname = 'IPCC_LUT_RTS_factors.csv'
     df_combined = combine_dataframes(df1, df2)
