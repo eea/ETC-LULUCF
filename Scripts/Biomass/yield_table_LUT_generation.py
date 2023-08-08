@@ -44,7 +44,7 @@ def get_coefficient(species_code, forest_zone, df_coeff, coeff_name):
 
     # if increment also filter specifically on forest zone
     if coeff_name == 'Iv':
-        coeff_row = df_coeff.loc[((df_coeff['Code'].isin([item for item in df_coeff['Code'] if species_code in item])) & (df_coeff['Forest_zone'] == forest_zone))]
+        coeff_row = df_coeff.loc[((df_coeff['Code'].isin([item for item in df_coeff['Code'] if species_code in item])) & (df_coeff['FOREST_ZONE'] == forest_zone))]
     else:
         coeff_row = df_coeff.loc[df_coeff['Code'].isin([item for item in df_coeff['Code'] if species_code in item])]
 
@@ -89,7 +89,8 @@ def create_unique_comb_df(DATAFRAMES):
 
     for species_code in df_code['Code'].unique():
         species_name = df_code.loc[df_code['Code'] == species_code]['NFI Species'].values[0]
-        for forest_zone in DATAFRAMES_LINKED.get('I')['Forest_zone'].unique():
+        species_name = species_name.replace(' ', '_')
+        for forest_zone in DATAFRAMES_LINKED.get('I')['FOREST_ZONE'].unique():
             # get now all the coefficients for the species and forest zone
 
             # CF
@@ -205,15 +206,15 @@ def get_LUT_forest_zone(settings):
 
     # get sheet with forest zone information per country
     dir_excel = settings.get('CONFIG_SPECS').get('yield_table_dir')
-    df_zones = get_sheet(dir_excel, 'Forest_zone')
+    df_zones = get_sheet(dir_excel, 'FOREST_ZONE')
 
     lst_df_LUT_zones = []
     for CNTR in df_zones.CNTR_CODE.unique():
         NUTS3_regions = shp_NUTS.loc[((shp_NUTS.CNTR_CODE == CNTR) & (shp_NUTS.LEVL_CODE == 3))]['NUTS_ID'].to_list()
-        ZONE = df_zones.loc[df_zones['CNTR_CODE'] == CNTR]['Forest_zone'].values[0]
+        ZONE = df_zones.loc[df_zones['CNTR_CODE'] == CNTR]['FOREST_ZONE'].values[0]
         df_NUTS_zone = pd.DataFrame(NUTS3_regions, columns=['NUTS_LEVEL3_ID'])
         df_NUTS_zone['NUTS_LEVEL0_ID'] = [CNTR] * df_NUTS_zone.shape[0]
-        df_NUTS_zone['Forest_zone'] = [ZONE] * df_NUTS_zone.shape[0]
+        df_NUTS_zone['FOREST_ZONE'] = [ZONE] * df_NUTS_zone.shape[0]
         lst_df_LUT_zones.append(df_NUTS_zone)
 
     df_NUTS_LUT_final = pd.concat(lst_df_LUT_zones)
