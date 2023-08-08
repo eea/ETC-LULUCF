@@ -304,18 +304,22 @@ def create_affor_potential(settings, affor_mask_array):
             ## Load the LUT with info on the EU4trees and the IPCC increment
             df_trees_biom_increment = pd.read_csv(os.path.join(settings.get('Basefolder_output'),
                                                                'NUTS_LUT_afforestation_scenario',
+                                                               'IPCC_data',
                                                                f'EU4_trees_LUT_biom_increment.csv'), sep=';')
             ## RTS info per tree species and ecological zone
             df_RTS_factors_trees = pd.read_csv(os.path.join(settings.get('Basefolder_output'),
                                                              'NUTS_LUT_afforestation_scenario',
+                                                             'IPCC_data',
                                                              'IPCC_LUT_RTS_factors.csv'), sep=';')
 
             df_BCEF_factors_trees = pd.read_csv(os.path.join(settings.get('Basefolder_output'),
                                                              'NUTS_LUT_afforestation_scenario',
+                                                             'IPCC_data',
                                                              'IPCC_LUT_BCEF.csv'), sep=';')
 
             df_forest_type_info = pd.read_csv(os.path.join(settings.get('Basefolder_output'),
                                                            'NUTS_LUT_afforestation_scenario',
+                                                           'IPCC_data',
                                                            'IPCC_LUT_forest_type.csv'), sep=';')
 
 
