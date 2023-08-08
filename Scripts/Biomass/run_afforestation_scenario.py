@@ -71,9 +71,9 @@ def afforestation_LUT_block_proc(settings: dict):
     Prob_files = glob.glob(os.path.join(Folder_EUtrees4F_prob, '*.tif'))
 
     # filter only on the tree species for which we have an IPCC LUT
-    LUT_tree_species = list(pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('Basefolder_output'),
-                                                     'NUTS_LUT_afforestation_scenario', 'IPCC_data',
-                                                     f'EU4_trees_LUT_biom_increment.csv'), sep=';').Tree_species)
+    LUT_tree_species = list(set(list(pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('Basefolder_output'),
+                                                     'NUTS_LUT_afforestation_scenario', 'JRC_yield_table',
+                                                     f'LUT_C_SEQ_AFFOR_JRC_V1.csv')).SPECIES_NAME)))
     Prob_files_filtered = [item for item in Prob_files if Path(
         item).stem.split('_ens')[0] in LUT_tree_species]
 
@@ -129,6 +129,9 @@ def afforestation_LUT_block_proc(settings: dict):
             affor_potential_layer, outname_affor_pot = create_affor_potential(
                 settings, affor_mask_layer)
 
+            if affor_potential_layer is None:
+                continue
+
             # ADD SOME METADATA to this afforestation potential
             # layer such that it is clear
             # which configuration was used for running.
@@ -145,7 +148,7 @@ def afforestation_LUT_block_proc(settings: dict):
             # actually afforested and the period between
             # the baseline year and the year of the prediction
             df_stats_NUTS = calc_stats_biomass_NUTS(os.path.join(
-                outfolder, outname_scenario), NUTS3_region, settings, correct_low_prod_areas=True)
+                outfolder, outname_scenario), NUTS3_region, settings)
             lst_NUTS_stats.append(df_stats_NUTS)
 
     if settings.get('CONFIG_SPECS').get('add_stats_NUTS') is not None:
@@ -306,7 +309,7 @@ if __name__ == '__main__':
 
     # extension of the output raster and stats that is
     # used to distinguish different scenario runs
-    scenario_name = f'Scenario_1_{str(Year_potential)}_fix'
+    scenario_name = f'Scenario_JRCV1_{str(Year_potential)}_fix'
 
     # if want to run with some NUTS specific factors
     # set the below parameter to true
@@ -322,8 +325,7 @@ if __name__ == '__main__':
 
     # define the folder with the needed LUT for NUTS specific parameter loading
     NUTS_LUT_factors_folder = os.path.join(
-        Basefolder_strata, 'NUTS_LUT_afforestation_scenario',
-        'IPCC_data')
+        Basefolder_strata, 'NUTS_LUT_afforestation_scenario')
 
     # define if the result might be overwritten
     overwrite = False
