@@ -343,6 +343,7 @@ def create_affor_potential(settings, affor_mask_array):
         logger.info(
             f'NO GEOMETRY PROVIDED FOR AREA {settings.get("NUTS3_info").NUTS_ID}')
         return None
+        
 
     if not os.path.exists(affor_pot_dir) or overwrite:
         # TODO write scaling factor in metadata of raster
@@ -351,7 +352,8 @@ def create_affor_potential(settings, affor_mask_array):
 
         if settings.get('CONFIG_SPECS').get('block_based_processing'):
             # block based opening of raster(s)
-            if affor_mask_array.size == 0:
+            #if affor_mask_array.size == 0 or affor_mask_array is None:  ##### updated by s4e
+            if affor_mask_array is None:
                 logger.info(
                     f'NO PIXEL DATA AVAILABLE FOR NUTS REGION: {settings.get("NUTS3_info").NUTS_ID}')
                 return None

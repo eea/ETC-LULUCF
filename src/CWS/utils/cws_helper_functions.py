@@ -28,6 +28,7 @@ import json
 
 
 
+
 #https://stackoverflow.com/questions/21257899/writing-a-csv-file-into-sql-server-database-using-python
 def greenmonkey(in_df, out_db, schema_name): 
        
@@ -72,8 +73,7 @@ def greenmonkey(in_df, out_db, schema_name):
 
 
 
-
-
+print ("done")
 
 
 
