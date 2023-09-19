@@ -120,12 +120,9 @@ def _get_LUT_strata(strata, lst_data,
     outname_hist = f'HIST_{LEVEL_LUC}_STRATA_{strata}.png'
     strata_meta = df_strata_info.loc[df_strata_info.STRATA_ID == strata]
     ENV_ZONE = strata_meta['ENV_CAT'].values[0]
-    # TODO ETC DI ADD SOIL TYPE INFO
-    #SLOPE_ZONE = strata_meta['SLOPE_RANGE'].values[0]
+    SLOPE_ZONE = strata_meta['SLOPE_RANGE'].values[0]
     LUC_CAT = strata_meta['LU_CAT'].values[0]
-    #TODO ADD SOIL TYPE INFO IN NAMING OF OUTPUT
-    #title_str = f'ENV_{ENV_ZONE}_SLOPE_{SLOPE_ZONE}_LU_{LUC_CAT}'
-    title_str = f'ENV_{ENV_ZONE}_LU_{LUC_CAT}'
+    title_str = f'ENV_{ENV_ZONE}_SLOPE_{SLOPE_ZONE}_LU_{LUC_CAT}'
 
     create_hist(data_strata, dict_printing_hist,
                 outname_hist, settings.get('outfolder_hist'),
@@ -389,13 +386,14 @@ def get_conversion_LUT_strata(df, to_class_NAME,
         df_filter = pd.concat(lst_LDN_added)
         cols_retain = ['from_LU_cat', 'from_SOC',
                             'from_SOC_stdv', 'STRATA_ID',
-                            'ENV_CAT','ENV_RANGE', 'nr_px_from'] + cols_LDN
+                            'ENV_CAT','ENV_RANGE', 'nr_px_from',
+                            'SLOPE_CAT', 'SLOPE_RANGE'] + cols_LDN
         df_filter = df_filter[cols_retain]
     else:
-        # TODO ETC DI FILTER ON SOIL TYPE COLUMN TOO
         df_filter = df_filter[['from_LU_cat', 'from_SOC',
-                            'from_SOC_stdv', 'STRATA_ID',
-                            'ENV_CAT','ENV_RANGE', 'nr_px_from']]
+                               'from_SOC_stdv', 'STRATA_ID',
+                               'ENV_CAT', 'ENV_RANGE', 'nr_px_from',
+                               'SLOPE_CAT', 'SLOPE_RANGE']]
     df_filter['to_LU_cat'] = to_class_NAME
     df_filter['to_SOC'] = to_pool_tot
     df_filter['to_SOC_stdv'] = to_pool_unc
@@ -496,11 +494,9 @@ def main_SOC_analysis(settings, sql=None):
             f'{os.path.join(settings.get("outfolder"), "stratification", outname)} does not exist')  # NOQA
 
         # # 1 DEM SLOPE
-        # SLOPE_CAT = list(settings.get('Slope_classes').keys())
-        # SLOPE_RANGE = [settings.get('Slope_classes').get(item)
-        #                for item in SLOPE_CAT]
-
-        # 1 TODO ETC DI Add soil type classification
+        SLOPE_CAT = list(settings.get('Slope_classes').keys())
+        SLOPE_RANGE = [settings.get('Slope_classes').get(item)
+                       for item in SLOPE_CAT]
 
         # 2 Environmental zones:
         ENV_CAT = list(settings.get('Env_zones_mapping').keys())
@@ -514,19 +510,18 @@ def main_SOC_analysis(settings, sql=None):
             f'LEVEL_{str(Level_LUC)}').get(item) for item in LUC_CAT]
 
         # Get now a list of all possible combinations for stratification
-        All_combinations_CAT = list(product(ENV_CAT, LUC_CAT))
+        All_combinations_CAT = list(product(SLOPE_CAT, ENV_CAT, LUC_CAT))
         All_combinations_RANGE = list(
-            product(ENV_RANGE, LUC_RANGE))
+            product(SLOPE_RANGE, ENV_RANGE, LUC_RANGE))
 
         # Now turn both list to a pandas dataframe where the ID of the strata will be defined
         # This ID will be used to join both lists together to obtain a full dataframe expressing
         # the entire defined stratification
 
-        # TODO ETC DI add SOIL TYPE CAT AND INFORMATION TO STRATIFICATION TABLE
         df_all_range = create_df_strata(All_combinations_RANGE, [
-            'ENV_RANGE', 'LU_RANGE'])
+            'SLOPE_RANGE', 'ENV_RANGE', 'LU_RANGE'])
         df_all_cat = create_df_strata(
-            All_combinations_CAT, ['ENV_CAT', 'LU_CAT'])
+            All_combinations_CAT, ['SLOPE_CAT', 'ENV_CAT', 'LU_CAT'])
 
         df_full_stratification = pd.merge(
             df_all_cat, df_all_range, on='STRATA_ID')
@@ -805,12 +800,11 @@ def main_SOC_analysis(settings, sql=None):
                 # to determine which will
                 # be the end SOC when applying a LUC
                 # in that strata
-                # TODO ETC DI GROUPBY SOIL CLASSES TOO
                 df_conv_table = df_LUT.groupby(
-                    ['ENV_CAT']).apply(get_conversion_LUT_strata, to_LUC,
-                                       settings,
-                                       df_LDN_info=df_LDN_info,
-                                       add_LDN=settings.get('add_LDN'))
+                    ['ENV_CAT', 'SLOPE_RANGE']).apply(get_conversion_LUT_strata, to_LUC,
+                                                      settings,
+                                                      df_LDN_info=df_LDN_info,
+                                                      add_LDN=settings.get('add_LDN'))
                 df_conv_table = df_conv_table.reset_index(drop=True)
                 lst_df_conv.append(df_conv_table)
 
@@ -832,13 +826,10 @@ if __name__ == '__main__':
         Env_zones_mapping)
 
     # The DEM may not be set as the first dataset!!!!!
-
-    # TODO ETC DI ADD SOIL TYPE CLASSIFICATION LAYER
-    #'SLOPE':  os.path.join(dir_signature, 'etc', 'lulucf', 'refs', 'dem', 'DEM_slope_3035_100m_warped.tif'),
     DATASETS = {
         'ENV': os.path.join(dir_signature, 'etc', 'lulucf', 'input_data',
                             'EnvZones', 'eea_r_3035_100_m_EnvZ-Metzger_2020_v1_r00.tif'),
-        
+        'SLOPE':  os.path.join(dir_signature, 'etc', 'lulucf', 'refs', 'dem', 'DEM_slope_3035_100m_warped.tif'),
         'LU': os.path.join(dir_signature, 'input_data', 'general',
                            'CLCACC', 'CLC2018ACC_V2018_20.tif'),
         'SOC': os.path.join(dir_signature, 'etc', 'lulucf', 'refs', 'isric', 'ocs_0-30cm_mean_3035_100m.tif')
@@ -857,20 +848,14 @@ if __name__ == '__main__':
                                    'LDN_Degradation_0722.xlsx')
     }
  
-    "SLOPE WILL BE DISABLED"
-    # # Below the slope categories are defined
-    # # For stratification
+    # Below the slope categories are defined
+    # For stratification
 
-    # SLOPE_CAT = {
-    #     'FLAT': [0, 5],
-    #     'MODERATE': [5, 20],
-    #     'STEEP': [20, 1000]
-    # }
-
-    "SOIL TYPE CLASSIFICATION LAYER SHOULD BE INCLUDED"
-    "CREATE IN THAT CASE A DICTIONARY (AS DONE FOR CLC AND ENVIRONMENTAL ZONE)"
-    "THAT LINKS EACH CLASS TO A SOIL TYPE GROUP/CLASS"
-    # TODO ETC DI
+    SLOPE_CAT = {
+        'FLAT': [0, 15],
+        'MODERATE': [15, 30],
+        'STEEP': [30, 1000]
+    }
 
     # Below define level of IPCC CLC crosswalk table
     # Current options: 'LULUCF' & 'SOC_classif'
@@ -882,7 +867,7 @@ if __name__ == '__main__':
 
     overwrite = False
     # If set to False, will run on the cluster
-    run_local = False
+    run_local = True
 
     # If the  SOC sample data should not be retrieved
     #  anymore set this to false
@@ -922,6 +907,7 @@ if __name__ == '__main__':
                 'Kernel': 128,
                 'Level_LUC_classes': Level_crosswalk,
                 'Env_zones_mapping': Env_zones_mapping,
+                'Slope_classes': SLOPE_CAT,
                 'Retrieve_SOC_kernel': retrieve_SOC_strata_kernel,
                 'Compile_SOC_LUT': compile_SOC_LUT,
                 'Assessment_SOC': assess_impact_lyrs_SOC,
