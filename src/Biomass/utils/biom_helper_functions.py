@@ -84,7 +84,10 @@ def define_affor_areas(settings, slope_max=87.5):
     # configuration applicable at EU scale
     if settings.get('CONFIG_SPECS').get('run_NUTS_SPECIFIC'):
         factor_scenario = get_factors_from_NUTS(
-            settings, factor_scenario, 'Slope', id_LUT_carbon_pool='afforestation')
+            settings, factor_scenario, 'Slope', 
+            id_LUT_carbon_pool='afforestation', 
+            folder = os.path.join(settings.get('CONFIG_SPECS').get('NUTS_LUT_folder')),
+                                                     LU_specific=False)
 
     # load the geometry of the NUTS region which is needed for block based opening of the rasters
     if not settings.get('NUTS3_info').geometry is None:
@@ -329,9 +332,6 @@ def create_affor_potential(settings, affor_mask_array):
     os.makedirs(outdir_affor_pot, exist_ok=True)
     affor_pot_dir = os.path.join(outdir_affor_pot, outname_affor_pot)
 
-    # the years for which a tree potential is available
-    years_EU4trees_pred = [2035, 2065, 2095]
-
     overwrite = settings.get('CONFIG_SPECS').get('overwrite')
 
     # load the geometry of the NUTS region which is needed for
@@ -367,8 +367,14 @@ def create_affor_potential(settings, affor_mask_array):
 
             # Load the LUT with info on the EU4trees and the IPCC related volume increment
             df_trees_biom_increment = pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('Basefolder_output'),
-                                                               'NUTS_LUT_afforestation_scenario',
-                                                               f'EU4_trees_LUT_biom_increment.csv'), sep=';')
+                                                               'NUTS_LUT_afforestation_scenario', 'JRC_yield_table',
+                                                               f'LUT_C_SEQ_AFFOR_JRC_V1.csv'))
+
+            
+            # Load the LUT that related to each NUTS region the coresponding forest zone
+            df_LUT_forest_zones = pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('Basefolder_output'),
+                                                               'NUTS_LUT_afforestation_scenario', 'JRC_yield_table',
+                                                               f'LUT_FOREST_ZONE.csv'))
 
             # store the info needed for creating output mask layer
             meta_raster = src_CLC_raster
@@ -401,13 +407,30 @@ def create_affor_potential(settings, affor_mask_array):
                     settings, AFFORESTATION_CONFIG, 'Tree_prob',
                     id_LUT_carbon_pool='afforestation',
                     LU_specific=False,
-                    folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_FOLDER'))
+                    folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_folder'))
                 tree_prob = factor_scenario_tree_prob.get('Tree_prob')
 
             else:
                 tree_species = AFFORESTATION_CONFIG.get('Tree_species')
                 tree_prob = AFFORESTATION_CONFIG.get('Tree_prob')
 
+            # check first if there is any data provided to calculate
+            #  the afforestation potental for this specific tree species 
+            # and forest zone in the NUTS3 region
+            NUTS3_ID = settings.get('NUTS3_info')['NUTS_ID']
+            # search the forest zone
+            if not NUTS3_ID in df_LUT_forest_zones.NUTS_LEVEL3_ID.to_list():
+                logger.warning(f'No forest zone information for {NUTS3_ID}')
+                return None, None
+
+            Forest_zone = df_LUT_forest_zones.loc[df_LUT_forest_zones['NUTS_LEVEL3_ID'] == NUTS3_ID]['FOREST_ZONE'].values[0]
+            
+            # search for any increment data
+            no_avail = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))].empty
+            if no_avail:
+                logger.warning(f'No yield information available for {NUTS3_ID} in FOREST ZONE {Forest_zone} and species {tree_species}')
+                return None, None
+            
             # These could not be NUTS specific factors and hence are
             # directly loaded from the default configuration
             RCP_scenario = AFFORESTATION_CONFIG.get('RCP')
@@ -415,53 +438,35 @@ def create_affor_potential(settings, affor_mask_array):
             # increase should be calculated
             Year_potential = AFFORESTATION_CONFIG.get('Year_potential')
 
-            # now we know the year for the potential,
-            # we can select the most closest EU4trees prob year
-            Diff_yrs_prob_predictions = [
-                abs(item - Year_potential) for item in years_EU4trees_pred]
-            check_duplicates = set(
-                [x for x in Diff_yrs_prob_predictions if Diff_yrs_prob_predictions.count(x) > 1])
-
-            # if multiple years are of the same distance from
-            # a probability layer take the probability layer in the future
-            if len(check_duplicates) > 1:
-                idx_year_select = max([i for i, e in enumerate(
-                    Diff_yrs_prob_predictions) if e == list(check_duplicates)[0]])
-            else:
-                idx_year_select = np.argmin(Diff_yrs_prob_predictions)
-
-            # now we can define the year for which the probability layer should be loaded
-            Year_select_EU4trees = years_EU4trees_pred[idx_year_select]
-
             # First check if we have the LUT tables to calculate the
             # volume increment for the requested tree species
-            if tree_species in df_trees_biom_increment.Tree_species.to_list():
-                # now select the suitable potential layer
-                # based on the potential year
+            if tree_species in df_trees_biom_increment.SPECIES_NAME.to_list():
+                # now select the suitable EUTrees-4F layers
                 # Open the occurence probability of the
-                # selected tree species for the selected RCP and year
-                EU4Trees_prob_select = [item for item in Files_EUtrees4F_prob if
-                                        Path(
-                                            item).stem == f'{tree_species}_ens-sdms_{RCP_scenario}_fut'
-                                        f'{str(Year_select_EU4trees)}_prob_pot_'
-                                        f'EPSG3035']
-                if len(EU4Trees_prob_select) != 1:
+                # selected tree species for the selected RCP 
+                EU4Trees_prob_select = [item for item in Files_EUtrees4F_prob if Path(item).stem.startswith(tree_species)]
+                EU4Trees_prob_select = [item for item in EU4Trees_prob_select if  RCP_scenario in Path(item).stem or 'cur' in Path(item).stem]
+
+                if len(EU4Trees_prob_select) == 0:
                     raise Exception(f'Problem with loading tree species prob layer for '
                                     f'{settings.get("NUTS3_info").NUTS_ID}')
 
-                # Open the tree probability raster
-                Tree_prob_raster, meta_tree_prob = open_raster_from_window(
-                    EU4Trees_prob_select[0], bounds)
+                # Open the tree probability rasters
+                lst_prob_rasters = []
+                for raster in EU4Trees_prob_select:
+                    Tree_prob_raster_tmp, meta_tree_prob = open_raster_from_window(
+                        raster, bounds)
+                    
+                    lst_prob_rasters.append(Tree_prob_raster_tmp)
 
+                # concatenate the different probability rasters 
+                # and check if the minimum probability exceeds the thresholds
+                Tree_prob_raster = np.amin(np.dstack(lst_prob_rasters), axis=2)
                 no_data_tree_prob = meta_tree_prob.get('nodata')
 
-                # based on the LUT, load the yearly volumen
-                # increment of the tree species
-                # TODO now the max annual increment is taken
-                #  to give the potential --> should be adjusted if more
-                # data become available on the mean or median
-                ann_increment_tree_species = df_trees_biom_increment.loc[df_trees_biom_increment
-                                                                         .Tree_species == tree_species]['Ann_increment_max'].values[0]
+                # based on the LUT, load the annual C seq increase
+                ann_C_seq_tree_species = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) 
+                & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))]['yrl_C_seq'].values[0]
 
                 # now find the location on which can be
                 # afforested (based on the afforestation  mask)
@@ -470,19 +475,12 @@ def create_affor_potential(settings, affor_mask_array):
                 loc_affor = np.where((affor_mask_array == 1) &
                                      ((Tree_prob_raster > (tree_prob * 10)) & (Tree_prob_raster < no_data_tree_prob)))
 
-                # The yearly living biomass (above and below ground) increase can now be computed based on a  IPCC formula as follows:
+                # The yearly living biomass (above and below ground) increase is be computed based on a  IPCC formula as follows:
                 """
-                annual C sink = Volume increment x Density x BCEFx (1+Rootoshoot) x CF x kg_to_ton
-                Where:
-                density = 500 kg/m³
-                BEF= 1.2
-                RTS = 0.25
-                CF= 0.47
-                kg_to_ton = 1000
+                annual C sink = Volume increment x Density x BCEFx (1+Rootoshoot) x CF 
                 """
-                # divide by 1000 to convert to tonC/hayr
-                affor_yrly_pot_raster[loc_affor] = int(ann_increment_tree_species * 500 * 1.2 * (1 + 0.25) *
-                                                       0.47*scaling * A_pixel_ha * 0.001)
+                # Multiple by the pixel area to know the increase per pixel
+                affor_yrly_pot_raster[loc_affor] = int(ann_C_seq_tree_species *scaling * A_pixel_ha)
 
             # ensure that the nodata pixels in one
             # of the layers are set back to no data
@@ -580,7 +578,7 @@ def create_metadata_description_afforestation(settings: dict, extent: str = 'EEA
                     'institution': 'EEA',
                     'name': settings.get('CONFIG_SPECS').get('scenario_name') + '_afforestation_yrl_increment',
                     'processing_date': datetime.datetime.now().date(),
-                    'source': ' Derived from IPCC LUT and EU4TREES projection',
+                    'source': ' Derived from JRC YIELD TABLE, IPCC COEFFICIENT and EU4TREES projection',
                     'RCP': AFFORESTATION_CONFIG.get('RCP'),
                     'Year_potential': settings.get('SCENARIO_SPECS').get('Year_potential'),
                     'title': settings.get('CONFIG_SPECS').get('scenario_name')+' scenario at 100 m'}
@@ -596,19 +594,19 @@ def create_metadata_description_afforestation(settings: dict, extent: str = 'EEA
             settings, AFFORESTATION_CONFIG, 'Slope',
             id_LUT_carbon_pool='afforestation',
             LU_specific=False,
-            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_FOLDER'))
+            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_folder'))
 
         dict_Tree_prob_factors_info = get_factors_from_NUTS(
             settings, AFFORESTATION_CONFIG, 'Tree_prob',
             id_LUT_carbon_pool='afforestation',
             LU_specific=False,
-            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_FOLDER'))
+            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_folder'))
 
         dict_Tree_species_selection_info = get_factors_from_NUTS(
             settings, AFFORESTATION_CONFIG, 'Tree_species',
             id_LUT_carbon_pool='afforestation',
             LU_specific=False,
-            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_FOLDER'))
+            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_folder'))
 
         dict_general.update({'Slope': 'Slope afforesation threshold value {}% & FROM {}'.format(dict_Slope_factors_info.get("Slope"),
                                                                                                 dict_Slope_factors_info.get("input_source"))})
@@ -640,7 +638,7 @@ def create_metadata_description_afforestation(settings: dict, extent: str = 'EEA
 
 
 def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
-                            settings: dict, stats_type: list = ['mean', 'count'], correct_low_prod_areas: bool = False) -> pd.DataFrame:
+                            settings: dict, stats_type: list = ['mean', 'count']) -> pd.DataFrame:
     """
     :param raster_dir: the directory of the raster on which the stats should be calculated
     :param spatial_layer: the geospatial layer that will be used to determine the areas for aggregation
@@ -674,7 +672,7 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
             settings, AFFORESTATION_CONFIG, 'Perc_reforest',
             id_LUT_carbon_pool='afforestation',
             LU_specific=False,
-            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_FOLDER'))
+            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_folder'))
     else:
         dict_perc_reforest_info = AFFORESTATION_CONFIG
 
@@ -701,20 +699,10 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
 
     # As no geographic distinct volume increment values are used, compensate a bit for this by dividing it by
     # 2 for scandinavian countries
-    if correct_low_prod_areas:
-        # only apply this factor for Scandinavia
-        if spatial_layer.NUTS_ID[0:2] in ['NO', 'FI', 'SE']:
-            df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly'] = (
-                df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly']/scaling) * 0.5
-
-        else:
-            df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly'] = df_stats[
-                f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly']/scaling
-
-    else:
-        # add the outcome to the proper scale
-        df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly'] = df_stats[
-            f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly']/scaling
+   
+    # add the outcome to the proper scale
+    df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly'] = df_stats[
+        f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly']/scaling
     df_stats = df_stats.round(2)
 
     # the average LB increase for the NUTS region
@@ -746,17 +734,17 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
             settings, AFFORESTATION_CONFIG, 'Slope',
             id_LUT_carbon_pool='afforestation',
             LU_specific=False,
-            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_FOLDER'))
+            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_folder'))
         dict_Tree_prob_factors_info = get_factors_from_NUTS(
             settings, AFFORESTATION_CONFIG, 'Tree_prob',
             id_LUT_carbon_pool='afforestation',
             LU_specific=False,
-            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_FOLDER'))
+            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_folder'))
         dict_Tree_species_factors_info = get_factors_from_NUTS(
             settings, AFFORESTATION_CONFIG, 'Tree_species',
             id_LUT_carbon_pool='afforestation',
             LU_specific=False,
-            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_FOLDER'))
+            folder=settings.get('CONFIG_SPECS').get('NUTS_LUT_folder'))
 
     else:
         dict_Slope_factors_info = AFFORESTATION_CONFIG
