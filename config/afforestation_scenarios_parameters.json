@@ -1,0 +1,97 @@
+{
+	"scenarios": [
+		
+			 {
+				"name": "S01_Little_effort_afforestation_Quercus_robur",
+				"Slope": 0,
+				"Tree_prob": 70,
+				"RCP": "rcp45",
+				"Tree_species": "Quercus_robur",
+				"Perc_reforest": 10,
+				"Year_potential": 2035,
+				"Year_baseline": 2018,
+				"input_source": "EEA39"
+			},
+			 {
+				"name": "S02_Semi_effort_afforestation_Quercus_robur",
+				"Slope": 0,
+				"Tree_prob": 70,
+				"RCP": "rcp45",
+				"Tree_species": "Quercus_robur",
+				"Perc_reforest": 20,
+				"Year_potential": 2035,
+				"Year_baseline": 2018,
+				"input_source": "EEA39"
+			},
+			{
+				"name": "S03_High_effort_afforestation_Quercus_robur",
+				"Slope": 0,
+				"Tree_prob": 70,
+				"RCP": "rcp45",
+				"Tree_species": "Quercus_robur",
+				"Perc_reforest": 50,
+				"Year_potential": 2035,
+				"Year_baseline": 2018,
+				"input_source": "EEA39"
+			},
+			{
+				"name": "S04_Slope_protection_Quercus_robur",
+				"Slope": 30,
+				"Tree_prob": 70,
+				"RCP": "rcp45",
+				"Tree_species": "Quercus_robur",
+				"Perc_reforest": 10,
+				"Year_potential": 2035,
+				"Year_baseline": 2018,
+				"input_source": "EEA39"
+			},
+
+			{
+				"name": "S05_Little_effort_afforestation_Fagus_sylvatica",
+				"Slope": 0,
+				"Tree_prob": 70,
+				"RCP": "rcp45",
+				"Tree_species": "Fagus_sylvatica",
+				"Perc_reforest": 10,
+				"Year_potential": 2035,
+				"Year_baseline": 2018,
+				"input_source": "EEA39"
+			},
+			 {
+				"name": "S06_Semi_effort_afforestation_Fagus_sylvatica",
+				"Slope": 0,
+				"Tree_prob": 70,
+				"RCP": "rcp45",
+				"Tree_species": "Fagus_sylvatica",
+				"Perc_reforest": 20,
+				"Year_potential": 2035,
+				"Year_baseline": 2018,
+				"input_source": "EEA39"
+			},
+			{
+				"name": "S07_High_effort_afforestation_Fagus_sylvatica",
+				"Slope": 0,
+				"Tree_prob": 70,
+				"RCP": "rcp45",
+				"Tree_species": "Fagus_sylvatica",
+				"Perc_reforest": 50,
+				"Year_potential": 2035,
+				"Year_baseline": 2018,
+				"input_source": "EEA39"
+			},
+			{
+				"name": "S08_Slope_protection_Fagus_sylvatica",
+				"Slope": 30,
+				"Tree_prob": 70,
+				"RCP": "rcp45",
+				"Tree_species": "Fagus_sylvatica",
+				"Perc_reforest": 10,
+				"Year_potential": 2035,
+				"Year_baseline": 2018,
+				"input_source": "EEA39"
+			}
+
+			
+		
+	]
+}
