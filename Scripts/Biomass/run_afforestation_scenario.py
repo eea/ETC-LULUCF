@@ -73,7 +73,7 @@ def afforestation_LUT_block_proc(settings: dict):
     # filter only on the tree species for which we have an IPCC LUT
     LUT_tree_species = list(set(list(pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('Basefolder_output'),
                                                      'NUTS_LUT_afforestation_scenario', 'JRC_yield_table',
-                                                     f'LUT_C_SEQ_AFFOR_JRC_V1.csv')).SPECIES_NAME)))
+                                                     f'LUT_C_SEQ_AFFOR_JRC_V2.csv')).SPECIES_NAME)))
     Prob_files_filtered = [item for item in Prob_files if Path(
         item).stem.split('_ens')[0] in LUT_tree_species]
 
@@ -81,9 +81,9 @@ def afforestation_LUT_block_proc(settings: dict):
     # this is actually hard coded now, but the CLC layer of 2018 should be eventually used in the processing chain
     # the code expects that the CLC layer is already in the proper extent.
     CLC_ref_file = settings.get('DATASETS').get('AFFORESTATION_MASK').get('CLC')
-    for prob_file in Prob_files_filtered:
-        align_raster_data_reference(
-            prob_file, CLC_ref_file, shp_NUTS, settings)
+    # for prob_file in Prob_files_filtered:
+    #     align_raster_data_reference(
+    #         prob_file, CLC_ref_file, shp_NUTS, settings)
 
     # LOOP NOW over the available NUTS3 regions
     # in the area that is specified
@@ -267,9 +267,9 @@ if __name__ == '__main__':
     please set the run_NUTS_specific_scenario 
     (see below) to True'
     """
-    Year_potential = 2035
+    Year_potential = 2050
     # starting year for afforestation
-    Year_baseline = 2018
+    Year_baseline = 2023
 
    # List of CLC classes that can be used for afforestation
 
@@ -279,7 +279,7 @@ if __name__ == '__main__':
         'Slope': 0,
         'RCP': 'rcp45',
         'Tree_prob': 70,
-        'Tree_species': 'Quercus_robur',
+        'Tree_species': 'Betula_pendula',
         'Perc_reforest': 10,
         'Year_potential': Year_potential,
         'input_source': 'EEA39'}
@@ -309,7 +309,17 @@ if __name__ == '__main__':
 
     # extension of the output raster and stats that is
     # used to distinguish different scenario runs
-    scenario_name = f'Scenario_JRCV1_{str(Year_potential)}_fix'
+    scenario_name = f'Scenario_JRCV2_{str(Year_potential)}_fix'
+
+    # define the yield table LUT and forest zone LUT
+    # location that should be used for processing
+    name_yield_table_LUT = 'LUT_C_SEQ_AFFOR_JRC_V2.csv'
+    name_LUT_forest_zones = 'LUT_FOREST_ZONE.csv'
+    folder_JRC_table = os.path.join(Basefolder_strata, 
+                                    'NUTS_LUT_afforestation_scenario',
+                                    'JRC_yield_table')
+    yield_table_LUT_dir = os.path.join(folder_JRC_table, name_yield_table_LUT)
+    forest_zone_dir = os.path.join(folder_JRC_table, name_LUT_forest_zones)
 
     # if want to run with some NUTS specific factors
     # set the below parameter to true
@@ -334,6 +344,8 @@ if __name__ == '__main__':
         'block_based_processing': block_based_processing,
         'Country': Country,
         'scenario_name': scenario_name,
+        'yield_table_dir': yield_table_LUT_dir,
+        'forest_zone_dir': forest_zone_dir,
         'run_NUTS_SPECIFIC': run_NUTS_specific_scenario,
         'add_stats_NUTS': add_stats_NUTS_level,
         'scaling': scaling,
