@@ -14,39 +14,74 @@ from pathlib import Path
 import geopandas as gpd
 
 
-def get_sheet(dir_excel, sheet_name):
-    df_sheet = pd.read_excel(dir_excel, sheet_name=sheet_name)
+def get_sheet(dir_excel, sheet_name,
+              skiprows=0):
+    df_sheet = pd.read_excel(dir_excel, sheet_name=sheet_name, 
+                             skiprows=skiprows)
     return df_sheet
 
+def Iv_aggregate(df,  
+                 mgmt_strategy=['E', 'S'], 
+                 agg_columns = ['EEA Forest code', 
+                                'FOREST_ZONE',
+                                'Forest type (IPCC)']):
+    """
+    Function that will calculate an aggregated value
+    of the increment per forest zone and forest type
+    """
+    # filter first the dataframe on the relevant
+    # management
+    df_filter = df.loc[df['mgmt_strategy'].isin(mgmt_strategy)]
+    df_agg = df_filter.groupby(by=agg_columns).mean(numeric_only=True)
+    df_agg = df_agg.reset_index()
+    return df_agg
+
 def get_df_coefficient(df, column_name, coefficient_name):
-    column_coef = df[[column_name]]
+    if not type(column_name) == list:
+        column_name = [column_name]
+    column_coef = df[column_name]
     # if is nan check if in the 'Not specified'
     # column some values are given
     if coefficient_name == 'Iv':
-        column_not_specified = df[['Not specified']]
-        # create final column filled by the 
-        # not specified column where needed  
-        column_final = [column_coef.iloc[item].values[0] if not pd.isnull(column_coef.iloc[item]).values[0] else column_not_specified.iloc[item].values[0] for item in column_not_specified.index]
-        df[coefficient_name] = column_final
-
+        df_agg = Iv_aggregate(df)
+        # drop ID EEA column
+        if 'ID EEA-JRC' in df_agg:
+            df_agg = df_agg.drop(columns=['ID EEA-JRC'])
+        for col in column_coef:
+            if 'AgeCL_2' in col:
+                age_info = '0-20'
+            elif 'AgeCL_3' in col:
+                age_info = '21-30'
+            coef_col = f'{coefficient_name}_{age_info}'
+            df_agg[coef_col] = df_agg[col]
+        # drop all age classes:
+        age_cols = [item for item in df_agg.columns if 'Age' in item]
+        df_agg = df_agg.drop(columns=age_cols)
+        return df_agg
     else:
-        df[coefficient_name] = column_coef
-    
-        
+        for col in column_coef:
+            if '<=20' in col:
+                age_info = '0-20'
+            else:
+                age_info = col
+            if 'RTS' in coefficient_name:
+                coef_col = f'{coefficient_name}'
+            else:
+                coef_col = f'{coefficient_name}_{age_info}'
+            df[coef_col] = column_coef[col]
+        return df
 
-    return df
-
-def get_coefficient(species_code, forest_zone, df_coeff, coeff_name):
+def get_coefficient(species_code, forest_zone, df_coeff, coeff_name,
+                    Iv=False):
     """
     Based on the species code and forest zone 
     find the corresponding coefficient
     """
-
-    # if increment also filter specifically on forest zone
-    if coeff_name == 'Iv':
-        coeff_row = df_coeff.loc[((df_coeff['Code'].isin([item for item in df_coeff['Code'] if species_code in item])) & (df_coeff['FOREST_ZONE'] == forest_zone))]
-    else:
+    if not Iv:
         coeff_row = df_coeff.loc[df_coeff['Code'].isin([item for item in df_coeff['Code'] if species_code in item])]
+    else:
+        coeff_row = df_coeff.loc[((df_coeff['EEA Forest code'] == species_code)
+                                  &(df_coeff['FOREST_ZONE'] == forest_zone))]
 
     if coeff_row.empty:
         logger.warning(f'No {coeff_name} FOUND FOR SPECIES: {species_code} AND FOREST ZONE: {forest_zone}')
@@ -74,10 +109,10 @@ def create_unique_comb_df(DATAFRAMES):
 
         # add the code to the dataframe
         if not 'Code' in df.columns:
-            df['Code'] = [list(df_code.loc[df_code['Forest type IPCC'] == item]['Code']) for item in df['Forest type IPCC'].values]
+            df['Code'] = [list(df_code.loc[df_code['Forest type (IPCC)'] == item]['Code']) for item in df['Forest type (IPCC)'].values]
         
-        if not 'Forest type IPCC' in df.columns:
-            df['Forest type IPCC'] = [list(df_code.loc[df_code['Code'] == item]['Forest type IPCC']) for item in df['Code'].values]
+        if not 'Forest type (IPCC)' in df.columns:
+            df['Forest type (IPCC)'] = [list(df_code.loc[df_code['Code'] == item]['Forest type (IPCC)']) for item in df['Code'].values]
         
         DATAFRAMES_LINKED.update({dataset_name: df})
    
@@ -88,7 +123,7 @@ def create_unique_comb_df(DATAFRAMES):
     lst_C_seq = []
 
     for species_code in df_code['Code'].unique():
-        species_name = df_code.loc[df_code['Code'] == species_code]['NFI Species'].values[0]
+        species_name = df_code.loc[df_code['Code'] == species_code]['EUTrees4F name'].values[0]
         species_name = species_name.replace(' ', '_')
         for forest_zone in DATAFRAMES_LINKED.get('I')['FOREST_ZONE'].unique():
             # get now all the coefficients for the species and forest zone
@@ -103,7 +138,7 @@ def create_unique_comb_df(DATAFRAMES):
             # BCEF
             df_BCEF = DATAFRAMES_LINKED.get('BCEF')
             BCEF_coeff = get_coefficient(species_code, forest_zone, 
-                                      df_BCEF, 'BCEF')
+                                      df_BCEF, ['BCEF_0-20', 'BCEF_21-40'])
             if BCEF_coeff is None:
                 continue
             
@@ -117,12 +152,15 @@ def create_unique_comb_df(DATAFRAMES):
             # Iv
             df_I = DATAFRAMES_LINKED.get('I')
             I_coeff = get_coefficient(species_code, forest_zone, 
-                                      df_I, 'Iv')
+                                      df_I, ['Iv_0-20', 'Iv_21-30'],
+                                      Iv=True)
             if I_coeff is None:
                 continue
             
             # Apply formula for annual carbon SEQ (tonnes*C/yr)
-            yrly_carbon_seq = I_coeff * BCEF_coeff * (1+RTS_coeff) * CF_coeff
+            # seperate for period 0-20 and 21-30
+            yrly_carbon_seq_1 = I_coeff[0] * BCEF_coeff[0] * (1+RTS_coeff) * CF_coeff
+            yrly_carbon_seq_2 = I_coeff[1] * BCEF_coeff[1] * (1+RTS_coeff) * CF_coeff
 
             # create now dataframe from all these parameters 
             # for the specific species and forest zone
@@ -133,10 +171,13 @@ def create_unique_comb_df(DATAFRAMES):
                 species_name,
                 forest_zone,
                 CF_coeff,
-                BCEF_coeff,
+                BCEF_coeff[0],
+                BCEF_coeff[1],
                 RTS_coeff,
-                I_coeff,
-                yrly_carbon_seq
+                I_coeff[0],
+                I_coeff[1],
+                yrly_carbon_seq_1,
+                yrly_carbon_seq_2
                 )
             )
     # now create the final LUT for 
@@ -148,17 +189,26 @@ def create_unique_comb_df(DATAFRAMES):
             'SPECIES_NAME',
             'FOREST_ZONE',
             'CF',
-            'BCEF',
+            'BCEF_0_20',
+            'BCEF_21_30',
             'RTS', 
-            'Iv',
-            'yrl_C_seq'
-
+            'Iv_0_20',
+            'Iv_21-30',
+            'yrl_C_seq_age_0_20',
+            'yrl_C_seq_age_21_30',
         ],
     )
-
     return df_C_seq_LUT
 
 
+def compile_species(df, idx_valid=6):
+    # keep only the five first columns
+    cols_filter = df.columns[0:idx_valid]
+    df_filter = df[cols_filter]
+    # only consider the once that are availbel in EUTrees-4F
+    df_filter_av = df_filter.loc[df_filter['Presence in the EUTrees4F'] == 'y']
+    df_filter_av = df_filter_av.rename(columns={'New Code': 'Code'})
+    return df_filter_av
 
 
     
@@ -169,21 +219,22 @@ def get_annual_C_species(settings):
     df_CF = get_sheet(dir_excel, 'CF')
 
     # Biomass conversion and expansion factor (BCEF)
-    df_BCEF = get_sheet(dir_excel, 'BCEFremoval')
-    df_BCEF = get_df_coefficient(df_BCEF, '<=20', 'BCEF')
+    df_BCEF = get_sheet(dir_excel, 'BCEFi')
+    df_BCEF = get_df_coefficient(df_BCEF, ['<=20', '21-40'], 'BCEF')
 
     # Root-to-shoot ratio (RTS)
     df_RTS = get_sheet(dir_excel, 'Root-to-shoot')
     df_RTS = get_df_coefficient(df_RTS, '<=75', 'RTS')
 
     # Net annual increment (I)
-    df_I = get_sheet(dir_excel, 'Iv_final')
-    df_I = get_df_coefficient(df_I, '<30', 'Iv')
+    df_I = get_sheet(dir_excel, 'NAI_even_EEA')
+    df_I = get_df_coefficient(df_I, ['AgeCL_2', 'AgeCL_3'], 'Iv')
 
     # Get also some information on the 
     # different forest species codes 
     # (linked with forest types from IPCC) 
-    df_F_code = get_sheet(dir_excel, 'Species_code')
+    df_F_code = get_sheet(dir_excel, 'Species_EEA', skiprows=1)
+    df_F_code = compile_species(df_F_code)
 
     # combine all the dataframes to get 
     # factors for every unique combination
@@ -233,7 +284,7 @@ def _main_(settings):
     # and check if file not yet exists
 
     outfolder = settings.get('CONFIG_SPECS').get('outfolder')
-    outname_C_seq_LUT = 'LUT_C_SEQ_AFFOR_JRC_V1.csv'
+    outname_C_seq_LUT = 'LUT_C_SEQ_AFFOR_JRC_V2.csv'
     outname_forest_zone_LUT = 'LUT_FOREST_ZONE.csv'
     overwrite = settings.get('CONFIG_SPECS').get('overwrite')
 
@@ -278,7 +329,7 @@ if __name__ == '__main__':
         dir_signature)
 
     # define the directory of the yield table:
-    name_file = 'inventory_JRC_Data_Collection_100523_nolink_ETC_CA_.xlsx'
+    name_file = 'Growth_curves_JRC_Data_Collection_140923_EEA.xlsx'
     folder_table = os.path.join(Basefolder_strata, 
                                 'NUTS_LUT_afforestation_scenario',
                                 'JRC_yield_table')
