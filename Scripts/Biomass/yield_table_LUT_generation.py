@@ -21,8 +21,7 @@ def get_sheet(dir_excel, sheet_name,
     return df_sheet
 
 def Iv_aggregate(df,  
-                 mgmt_type='H',
-                 mgmt_strategy='E', 
+                 mgmt_strategy=['E', 'S'], 
                  agg_columns = ['EEA Forest code', 
                                 'FOREST_ZONE',
                                 'Forest type (IPCC)']):
@@ -32,8 +31,7 @@ def Iv_aggregate(df,
     """
     # filter first the dataframe on the relevant
     # management
-    df_filter = df.loc[((df['mgmt_type'] == mgmt_type) & 
-                        (df['mgmt_strategy'] == mgmt_strategy))]
+    df_filter = df.loc[df['mgmt_strategy'].isin(mgmt_strategy)]
     df_agg = df_filter.groupby(by=agg_columns).mean(numeric_only=True)
     df_agg = df_agg.reset_index()
     return df_agg
