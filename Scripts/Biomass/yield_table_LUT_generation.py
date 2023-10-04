@@ -396,7 +396,7 @@ def _main_(settings):
     # and check if file not yet exists
 
     outfolder = settings.get('CONFIG_SPECS').get('outfolder')
-    outname_C_seq_LUT = 'LUT_C_SEQ_AFFOR_JRC_V2.csv'
+    outname_C_seq_LUT = 'LUT_C_SEQ_AFFOR_JRC_V3.csv'
     outname_forest_zone_LUT = 'LUT_FOREST_ZONE.csv'
     overwrite = settings.get('CONFIG_SPECS').get('overwrite')
     
