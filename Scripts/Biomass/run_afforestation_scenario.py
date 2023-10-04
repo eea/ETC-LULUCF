@@ -309,11 +309,11 @@ if __name__ == '__main__':
 
     # extension of the output raster and stats that is
     # used to distinguish different scenario runs
-    scenario_name = f'Scenario_JRCV2_{str(Year_potential)}_fix'
+    scenario_name = f'Scenario_JRCV3_{str(Year_potential)}_fix'
 
     # define the yield table LUT and forest zone LUT
     # location that should be used for processing
-    name_yield_table_LUT = 'LUT_C_SEQ_AFFOR_JRC_V2.csv'
+    name_yield_table_LUT = 'LUT_C_SEQ_AFFOR_JRC_V3.csv'
     name_LUT_forest_zones = 'LUT_FOREST_ZONE.csv'
     folder_JRC_table = os.path.join(Basefolder_strata, 
                                     'NUTS_LUT_afforestation_scenario',
