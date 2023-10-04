@@ -375,14 +375,14 @@ def create_affor_potential(settings, affor_mask_array):
             meta_raster = src_CLC_raster
             transform_raster = src_CLC_raster.get('transform')
             meta_raster.update({'nodata': 65535, 'dtype': 'uint16', 
-                                'count': 2})
+                                'count': 6})
             spatial_resolution = transform_raster[0]
             # the area of each pixel in hectares
             A_pixel_ha = int(((spatial_resolution**2) / 10000))
 
             # create raster to write output in
             affor_yrly_pot_raster = np.full(
-                (2,) + affor_mask_array.shape, 65535).astype('uint16')
+                (6,) + affor_mask_array.shape, 65535).astype('uint16')
 
             # load the specific (flexible) configuration per
             # NUTS region for afforestation
@@ -463,11 +463,20 @@ def create_affor_potential(settings, affor_mask_array):
                 Tree_prob_raster = np.amin(np.dstack(lst_prob_rasters), axis=2)
                 no_data_tree_prob = meta_tree_prob.get('nodata')
 
-                # based on the LUT, load the annual C seq increase
-                ann_C_seq_tree_species_age_0_20 = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) 
-                & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))]['yrl_C_seq_age_0_20'].values[0]
-                ann_C_seq_tree_species_age_21_30 = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) 
-                & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))]['yrl_C_seq_age_21_30'].values[0]
+                # based on the LUT, load the annual C seq increase 
+                # including the min, average and maximum sequestration
+                avg_ann_C_seq_tree_species_age_0_20 = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) 
+                & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))]['yrl_C_seq_age_0_20_avg'].values[0]
+                avg_ann_C_seq_tree_species_age_21_30 = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) 
+                & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))]['yrl_C_seq_age_21_30_avg'].values[0]
+                max_ann_C_seq_tree_species_age_0_20 = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) 
+                & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))]['yrl_C_seq_age_0_20_max'].values[0]
+                max_ann_C_seq_tree_species_age_21_30 = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) 
+                & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))]['yrl_C_seq_age_21_30_max'].values[0]
+                min_ann_C_seq_tree_species_age_0_20 = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) 
+                & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))]['yrl_C_seq_age_0_20_min'].values[0]
+                min_ann_C_seq_tree_species_age_21_30 = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) 
+                & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))]['yrl_C_seq_age_21_30_min'].values[0]
 
                 # now find the location on which can be
                 # afforested (based on the afforestation  mask)
@@ -481,11 +490,18 @@ def create_affor_potential(settings, affor_mask_array):
                 annual C sink = Volume increment x Density x BCEFx (1+Rootoshoot) x CF 
                 """
                 # Multiple by the pixel area to know the increase per pixel
-                # first band for age 0-20
-                # second band for age 21-30
-                affor_yrly_pot_raster[0,loc_affor[0], loc_affor[1]] = int(ann_C_seq_tree_species_age_0_20 *scaling * A_pixel_ha)
-                affor_yrly_pot_raster[1,loc_affor[0], loc_affor[1]] = int(ann_C_seq_tree_species_age_21_30 *scaling * A_pixel_ha)
-
+                # first band for average age 0-20
+                # second band for average age 21-30
+                # third band for min age 0-20
+                # fourth band for min age 21-30
+                # fifth band for max age 0-20
+                # sixt band for max age 21-30
+                affor_yrly_pot_raster[0,loc_affor[0], loc_affor[1]] = int(avg_ann_C_seq_tree_species_age_0_20 *scaling * A_pixel_ha)
+                affor_yrly_pot_raster[1,loc_affor[0], loc_affor[1]] = int(avg_ann_C_seq_tree_species_age_21_30 *scaling * A_pixel_ha)
+                affor_yrly_pot_raster[2,loc_affor[0], loc_affor[1]] = int(min_ann_C_seq_tree_species_age_0_20 *scaling * A_pixel_ha)
+                affor_yrly_pot_raster[3,loc_affor[0], loc_affor[1]] = int(min_ann_C_seq_tree_species_age_21_30 *scaling * A_pixel_ha)
+                affor_yrly_pot_raster[4,loc_affor[0], loc_affor[1]] = int(max_ann_C_seq_tree_species_age_0_20 *scaling * A_pixel_ha)
+                affor_yrly_pot_raster[5,loc_affor[0], loc_affor[1]] = int(max_ann_C_seq_tree_species_age_21_30 *scaling * A_pixel_ha)
             # ensure that the nodata pixels in one
             # of the layers are set back to no data
             affor_yrly_pot_raster[:, CLC_LUCAT_raster ==
@@ -654,8 +670,15 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
     """
 
     raster_object = rasterio.open(raster_dir)
-    raster_values_age_0_20 = raster_object.read(1)
-    raster_values_age_21_30 = raster_object.read(2)
+    # AVG
+    avg_raster_values_age_0_20 = raster_object.read(1)
+    avg_raster_values_age_21_30 = raster_object.read(2)
+    # MIN
+    min_raster_values_age_0_20 = raster_object.read(3)
+    min_raster_values_age_21_30 = raster_object.read(4)
+    # MAX
+    max_raster_values_age_0_20 = raster_object.read(5)
+    max_raster_values_age_21_30 = raster_object.read(6)
     affine = raster_object.meta.get('transform')
     no_data = raster_object.meta.get('nodata')
     scaling = settings.get('CONFIG_SPECS').get('scaling')
@@ -684,16 +707,31 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
     lst_stats = []
     if 'mean' in stats_type:
         idx_mean = stats_type.index('mean')
-        stats_mean_age_0_20 = zonal_stats(spatial_layer.geometry, raster_values_age_0_20, 
+        # AVG
+        avg_stats_age_0_20 = zonal_stats(spatial_layer.geometry, avg_raster_values_age_0_20, 
                                           affine=affine, nodata=no_data, stats=stats_type[idx_mean])
-        stats_mean_age_21_30 = zonal_stats(spatial_layer.geometry, raster_values_age_21_30, 
+        avg_stats_age_21_30 = zonal_stats(spatial_layer.geometry, avg_raster_values_age_21_30, 
                                           affine=affine, nodata=no_data, stats=stats_type[idx_mean])
-        lst_stats.append(pd.DataFrame.from_dict(stats_mean_age_0_20))
-        lst_stats.append(pd.DataFrame.from_dict(stats_mean_age_21_30))
-
+        lst_stats.append(pd.DataFrame.from_dict(avg_stats_age_0_20))
+        lst_stats.append(pd.DataFrame.from_dict(avg_stats_age_21_30))
+        # MIN
+        min_stats_age_0_20 = zonal_stats(spatial_layer.geometry, min_raster_values_age_0_20, 
+                                          affine=affine, nodata=no_data, stats=stats_type[idx_mean])
+        min_stats_age_21_30 = zonal_stats(spatial_layer.geometry, min_raster_values_age_21_30, 
+                                          affine=affine, nodata=no_data, stats=stats_type[idx_mean])
+        lst_stats.append(pd.DataFrame.from_dict(min_stats_age_0_20))
+        lst_stats.append(pd.DataFrame.from_dict(min_stats_age_21_30))
+        # MAX
+        max_stats_age_0_20 = zonal_stats(spatial_layer.geometry, max_raster_values_age_0_20, 
+                                          affine=affine, nodata=no_data, stats=stats_type[idx_mean])
+        max_stats_age_21_30 = zonal_stats(spatial_layer.geometry, max_raster_values_age_21_30, 
+                                          affine=affine, nodata=no_data, stats=stats_type[idx_mean])
+       
+        lst_stats.append(pd.DataFrame.from_dict(max_stats_age_0_20))
+        lst_stats.append(pd.DataFrame.from_dict(max_stats_age_21_30))
     if 'count' in stats_type:
         idx_count = stats_type.index('count')
-        count_occur = np.copy(raster_values_age_0_20)
+        count_occur = np.copy(avg_raster_values_age_0_20)
         # if afforestation possible set to 1
         count_occur[count_occur != no_data] = 1
         stats_count = zonal_stats(spatial_layer.geometry, count_occur, affine=affine,
@@ -705,18 +743,34 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
     df_stats.columns = [
         f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly_age_0_20',
         f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly_age_21_30', 
+        f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_min_yrly_age_0_20',
+        f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_min_yrly_age_21_30', 
+        f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_max_yrly_age_0_20',
+        f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_max_yrly_age_21_30', 
         'nr_pixels']
    
     # add the outcome to the proper scale
+    # AVG
     df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly_age_0_20'] = df_stats[
         f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly_age_0_20']/scaling
     df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly_age_21_30'] = df_stats[
         f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly_age_21_30']/scaling
+    # MIN
+    df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_min_yrly_age_0_20'] = df_stats[
+        f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_min_yrly_age_0_20']/scaling
+    df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_min_yrly_age_21_30'] = df_stats[
+        f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_min_yrly_age_21_30']/scaling
+    
+    # MAX
+    df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_max_yrly_age_0_20'] = df_stats[
+        f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_max_yrly_age_0_20']/scaling
+    df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_max_yrly_age_21_30'] = df_stats[
+        f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_max_yrly_age_21_30']/scaling
+
     df_stats = df_stats.round(2)
 
     # the average LB increase for the NUTS region
-    value_LB_NUTS_age_0_20 = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly_age_0_20'].values[0]
-    value_LB_NUTS_age_0_20 = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly_age_21_30'].values[0]
+    avg_value_LB_NUTS_age_0_20 = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly_age_0_20'].values[0]
 
     # calculate now the total potential of carbon increase at the
     # year based on the difference
@@ -728,22 +782,51 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
         (dict_perc_reforest_info.get('Perc_reforest')/100)
     
     
-    if value_LB_NUTS_age_0_20 != no_data:
+    if avg_value_LB_NUTS_age_0_20 != no_data:
         if nr_years_future <= 20:
-            tot_seq_C_final = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}'
+            # AVG
+            avg_tot_seq_C_final = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}'
                                            f'_mean_yrly_age_0_20'] * nr_years_future * df_stats['nr_pixels'].values[0]
+            # MIN
+            min_tot_seq_C_final = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}'
+                                           f'_min_yrly_age_0_20'] * nr_years_future * df_stats['nr_pixels'].values[0]
+            # MAX
+            max_tot_seq_C_final = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}'
+                                           f'_max_yrly_age_0_20'] * nr_years_future * df_stats['nr_pixels'].values[0]
         else:
             # also take the part after 20 years into account
+            # AVG
             tot_seq_C_part1 = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}'
                                            f'_mean_yrly_age_0_20'] * 20 * df_stats['nr_pixels'].values[0]
             tot_seq_C_part2 = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}'
                                            f'_mean_yrly_age_21_30'] * (nr_years_future-20) * df_stats['nr_pixels'].values[0]
-            tot_seq_C_final  = tot_seq_C_part1 + tot_seq_C_part2
+            avg_tot_seq_C_final  = tot_seq_C_part1 + tot_seq_C_part2
 
-        df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_total_{str(year_potential)}'] = tot_seq_C_final
+            # MIN
+            tot_seq_C_part1 = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}'
+                                           f'_min_yrly_age_0_20'] * 20 * df_stats['nr_pixels'].values[0]
+            tot_seq_C_part2 = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}'
+                                           f'_min_yrly_age_21_30'] * (nr_years_future-20) * df_stats['nr_pixels'].values[0]
+            min_tot_seq_C_final  = tot_seq_C_part1 + tot_seq_C_part2
+
+            # MAX
+            tot_seq_C_part1 = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}'
+                                           f'_max_yrly_age_0_20'] * 20 * df_stats['nr_pixels'].values[0]
+            tot_seq_C_part2 = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}'
+                                           f'_max_yrly_age_21_30'] * (nr_years_future-20) * df_stats['nr_pixels'].values[0]
+            max_tot_seq_C_final  = tot_seq_C_part1 + tot_seq_C_part2
+
+        # AVG
+        df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_total_{str(year_potential)}_avg'] = avg_tot_seq_C_final
+        # MIN
+        df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_total_{str(year_potential)}_min'] = min_tot_seq_C_final
+        # MAX
+        df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_total_{str(year_potential)}_max'] = max_tot_seq_C_final
 
     else:
-        df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_total_{str(year_potential)}'] = no_data
+        df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_total_{str(year_potential)}_avg'] = no_data
+        df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_total_{str(year_potential)}_min'] = no_data
+        df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_total_{str(year_potential)}_max'] = no_data
 
     # write some NUTS specific information to the dataframe
     df_stats['NUTS_ID'] = spatial_layer.NUTS_ID
@@ -790,6 +873,18 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
     Year_potential = AFFORESTATION_CONFIG.get('Year_potential')
     df_stats['RCP'] = RCP_scenario
     df_stats['Year_potential'] = Year_potential
+
+    # add also the forest type (D/C) and growth speed type (S/F)
+    df_F_info = pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('yield_table_dir')))
+    # GET forest type (FT)
+    FT = df_F_info.loc[df_F_info['SPECIES_NAME'] == dict_Tree_species_factors_info.get(
+        'Tree_species')]['FT'].values[0]
+    df_stats['FT'] = FT
+    # Get growth speed type
+    FGS = df_F_info.loc[df_F_info['SPECIES_NAME'] == dict_Tree_species_factors_info.get(
+        'Tree_species')]['FGS'].values[0]
+    df_stats['FGS'] = FGS
+
 
     df_stats['geometry'] = [spatial_layer.geometry]
 
