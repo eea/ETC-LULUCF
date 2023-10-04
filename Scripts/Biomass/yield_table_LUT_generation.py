@@ -32,9 +32,19 @@ def Iv_aggregate(df,
     # filter first the dataframe on the relevant
     # management
     df_filter = df.loc[df['mgmt_strategy'].isin(mgmt_strategy)]
-    df_agg = df_filter.groupby(by=agg_columns).mean(numeric_only=True)
-    df_agg = df_agg.reset_index()
-    return df_agg
+    df_agg_avg = df_filter.groupby(by=agg_columns).mean(numeric_only=True)
+    df_agg_avg = df_agg_avg.reset_index()
+    df_agg_min = df_filter.groupby(by=agg_columns).quantile(q=0.1, 
+                                                            numeric_only=True)
+    df_agg_min = df_agg_min.reset_index()
+    df_agg_max = df_filter.groupby(by=agg_columns).quantile(q=0.9, 
+                                                            numeric_only=True)
+    df_agg_max = df_agg_max.reset_index()
+    df_agg_avg['AgeCL_2_min'] = df_agg_min['AgeCL_2']
+    df_agg_avg['AgeCL_3_min'] = df_agg_min['AgeCL_3']
+    df_agg_avg['AgeCL_2_max'] = df_agg_max['AgeCL_2']
+    df_agg_avg['AgeCL_3_max'] = df_agg_max['AgeCL_3']
+    return df_agg_avg
 
 def get_df_coefficient(df, column_name, coefficient_name):
     if not type(column_name) == list:
@@ -54,10 +64,22 @@ def get_df_coefficient(df, column_name, coefficient_name):
                 age_info = '21-30'
             coef_col = f'{coefficient_name}_{age_info}'
             df_agg[coef_col] = df_agg[col]
+            df_agg[coef_col + '_max'] = df_agg[col+'_max']
+            df_agg[coef_col + '_min'] = df_agg[col+'_min']
         # drop all age classes:
         age_cols = [item for item in df_agg.columns if 'Age' in item]
         df_agg = df_agg.drop(columns=age_cols)
         return df_agg
+    elif coefficient_name == 'Iv_add':
+        for col in column_coef:
+            if 'Avg' in col:
+                df['Iv_0-20'] = df[col]
+                df['Iv_21-30'] = df[col]
+            else:
+                df[f'Iv_0-20_{col.lower()}'] = df[col]
+                df[f'Iv_21-30_{col.lower()}'] = df[col]
+        df = df.drop(columns=column_coef)
+        return df
     else:
         for col in column_coef:
             if '<=20' in col:
@@ -66,19 +88,25 @@ def get_df_coefficient(df, column_name, coefficient_name):
                 age_info = col
             if 'RTS' in coefficient_name:
                 coef_col = f'{coefficient_name}'
+            elif 'FG' in coefficient_name:
+                coef_col = f'{coefficient_name}'
+            elif coefficient_name in ['FT', 'FGS']:
+                coef_col = f'{coefficient_name}'
             else:
                 coef_col = f'{coefficient_name}_{age_info}'
             df[coef_col] = column_coef[col]
         return df
 
 def get_coefficient(species_code, forest_zone, df_coeff, coeff_name,
-                    Iv=False):
+                    ZONE_DEP=False, SPECIES_DEP = False):
     """
     Based on the species code and forest zone 
     find the corresponding coefficient
     """
-    if not Iv:
+    if not ZONE_DEP:
         coeff_row = df_coeff.loc[df_coeff['Code'].isin([item for item in df_coeff['Code'] if species_code in item])]
+    elif SPECIES_DEP:
+         coeff_row = df_coeff.loc[df_coeff['EEA Forest code'] == species_code]
     else:
         coeff_row = df_coeff.loc[((df_coeff['EEA Forest code'] == species_code)
                                   &(df_coeff['FOREST_ZONE'] == forest_zone))]
@@ -87,7 +115,7 @@ def get_coefficient(species_code, forest_zone, df_coeff, coeff_name,
         logger.warning(f'No {coeff_name} FOUND FOR SPECIES: {species_code} AND FOREST ZONE: {forest_zone}')
         return None
 
-    if coeff_row.shape[0] > 1:
+    if coeff_row.shape[0] > 1 and not coeff_name in ['FT', 'FGS']:
         logger.error(f'MORE THAN TWO OCCURENCES OF {coeff_name} FOR SPECIES CODE {species_code}: AND FOREST ZONE: {forest_zone}')
         # INFO: TAKE THE MEAN OF THE VALUES (ONLY OCCUR FOR RTS OF ONE FOREST TYPE)
         coeff_row = pd.DataFrame(coeff_row.mean()).T
@@ -152,32 +180,57 @@ def create_unique_comb_df(DATAFRAMES):
             # Iv
             df_I = DATAFRAMES_LINKED.get('I')
             I_coeff = get_coefficient(species_code, forest_zone, 
-                                      df_I, ['Iv_0-20', 'Iv_21-30'],
-                                      Iv=True)
+                                      df_I, ['Iv_0-20', 'Iv_21-30',
+                                             'Iv_0-20_min', 'Iv_21-30_min',
+                                             'Iv_0-20_max', 'Iv_21-30_max'],
+                                            ZONE_DEP=True)
             if I_coeff is None:
                 continue
+
+            # FT
+            df_FG = DATAFRAMES_LINKED.get('FG')
+            FT_coeff = get_coefficient(species_code, forest_zone,
+                                       df_FG, 'FT', SPECIES_DEP=True)
             
+             # FGS
+            df_FGS = DATAFRAMES_LINKED.get('FGS')
+            FGS_coeff = get_coefficient(species_code, forest_zone,
+                                       df_FGS, 'FGS', SPECIES_DEP=True)
+
             # Apply formula for annual carbon SEQ (tonnes*C/yr)
-            # seperate for period 0-20 and 21-30
-            yrly_carbon_seq_1 = I_coeff[0] * BCEF_coeff[0] * (1+RTS_coeff) * CF_coeff
-            yrly_carbon_seq_2 = I_coeff[1] * BCEF_coeff[1] * (1+RTS_coeff) * CF_coeff
+            # seperate for period 0-20 and 21-30 and addd also min max range
+            yrly_carbon_seq_1_avg = I_coeff[0] * BCEF_coeff[0] * (1+RTS_coeff) * CF_coeff
+            yrly_carbon_seq_2_avg = I_coeff[1] * BCEF_coeff[1] * (1+RTS_coeff) * CF_coeff
+            yrly_carbon_seq_1_min = I_coeff[2] * BCEF_coeff[0] * (1+RTS_coeff) * CF_coeff
+            yrly_carbon_seq_2_min = I_coeff[3] * BCEF_coeff[1] * (1+RTS_coeff) * CF_coeff
+            yrly_carbon_seq_1_max = I_coeff[4] * BCEF_coeff[0] * (1+RTS_coeff) * CF_coeff
+            yrly_carbon_seq_2_max = I_coeff[5] * BCEF_coeff[1] * (1+RTS_coeff) * CF_coeff
 
             # create now dataframe from all these parameters 
             # for the specific species and forest zone
 
-            lst_C_seq.append(
-                (
-                species_code,
-                species_name,
-                forest_zone,
-                CF_coeff,
-                BCEF_coeff[0],
-                BCEF_coeff[1],
-                RTS_coeff,
-                I_coeff[0],
-                I_coeff[1],
-                yrly_carbon_seq_1,
-                yrly_carbon_seq_2
+            lst_C_seq.append((
+                    species_code,
+                    species_name,
+                    forest_zone,
+                    FGS_coeff,
+                    FT_coeff,
+                    CF_coeff,
+                    BCEF_coeff[0],
+                    BCEF_coeff[1],
+                    RTS_coeff,
+                    I_coeff[0],
+                    I_coeff[1],
+                    I_coeff[2],
+                    I_coeff[3],
+                    I_coeff[4],
+                    I_coeff[5],
+                    yrly_carbon_seq_1_avg,
+                    yrly_carbon_seq_2_avg,
+                    yrly_carbon_seq_1_min,
+                    yrly_carbon_seq_2_min,
+                    yrly_carbon_seq_1_max,
+                    yrly_carbon_seq_2_max,
                 )
             )
     # now create the final LUT for 
@@ -188,14 +241,24 @@ def create_unique_comb_df(DATAFRAMES):
             'SPECIES_CODE',
             'SPECIES_NAME',
             'FOREST_ZONE',
+            'FGS',
+            'FT',
             'CF',
             'BCEF_0_20',
             'BCEF_21_30',
-            'RTS', 
-            'Iv_0_20',
-            'Iv_21-30',
-            'yrl_C_seq_age_0_20',
-            'yrl_C_seq_age_21_30',
+            'RTS',
+            'Iv_0_20_avg',
+            'Iv_21-30_avg',
+            'Iv_0_20_min',
+            'Iv_21-30_min',
+            'Iv_0_20_max',
+            'Iv_21-30_max',
+            'yrl_C_seq_age_0_20_avg',
+            'yrl_C_seq_age_21_30_avg',
+            'yrl_C_seq_age_0_20_min',
+            'yrl_C_seq_age_21_30_min',
+            'yrl_C_seq_age_0_20_max',
+            'yrl_C_seq_age_21_30_max',
         ],
     )
     return df_C_seq_LUT
@@ -226,15 +289,39 @@ def get_annual_C_species(settings):
     df_RTS = get_sheet(dir_excel, 'Root-to-shoot')
     df_RTS = get_df_coefficient(df_RTS, '<=75', 'RTS')
 
-    # Net annual increment (I)
-    df_I = get_sheet(dir_excel, 'NAI_even_EEA')
-    df_I = get_df_coefficient(df_I, ['AgeCL_2', 'AgeCL_3'], 'Iv')
+    # Net annual increment (I) based on JRC
+    df_I_JRC = get_sheet(dir_excel, 'NAI_even_EEA')
+    df_I_JRC = get_df_coefficient(df_I_JRC, ['AgeCL_2', 'AgeCL_3'], 'Iv')
+    df_I_JRC = df_I_JRC.reset_index(drop=True)
+
+    # Net annual increment (I) based on growth curve calculation
+    df_I_added = get_sheet(dir_excel, 'NAI_even_EEA_add_species')
+    df_I_added = get_df_coefficient(df_I_added, ['Min', 'Max', 'Avg'], 'Iv_add')
+    df_I_added = df_I_added.reset_index(drop=True)
+
+    # merge the two increment dataframes
+    df_I = pd.concat([df_I_JRC, df_I_added], axis=0)
+    df_I = df_I.reset_index(drop=True)
+
+    # Get forest group info (FT)
+    df_FG = get_sheet(dir_excel, 'Species_EEA_type')
+    df_FG = get_df_coefficient(df_FG, 'Forest type', 'FT')
+    
+    # Get forest type growth speed info (FGS)
+    df_FGS = get_sheet(dir_excel, 'Species_EEA_type')
+    df_FGS = get_df_coefficient(df_FGS, 'Type of specie', 'FGS')
 
     # Get also some information on the 
     # different forest species codes 
     # (linked with forest types from IPCC) 
-    df_F_code = get_sheet(dir_excel, 'Species_EEA', skiprows=1)
-    df_F_code = compile_species(df_F_code)
+    df_F_code_JRC = get_sheet(dir_excel, 'Species_EEA', skiprows=1)
+    df_F_code_JRC = compile_species(df_F_code_JRC)
+    df_F_code_JRC = df_F_code_JRC.reset_index(drop=True)
+    df_F_code_added = get_sheet(dir_excel, 'Species_EEA_added')
+    df_F_code_added = df_F_code_added.reset_index(drop=True)
+    df_F_code = pd.concat([df_F_code_JRC, df_F_code_added], axis=0)
+    df_F_code = df_F_code.reset_index(drop=True)
+    df_F_code = df_F_code.sort_values(by=['Code'])
 
     # combine all the dataframes to get 
     # factors for every unique combination
@@ -243,12 +330,42 @@ def get_annual_C_species(settings):
         'BCEF': df_BCEF,
         'RTS': df_RTS,
         'I': df_I,
+        'FG': df_FG,
+        'FGS': df_FGS,
         'Code': df_F_code
-    }
-    
+    } 
+
     df_C_seq_LUT = create_unique_comb_df(DATAFRAMES)
 
     return df_C_seq_LUT
+
+def add_ms_species(settings):
+    """
+    Function that will add missing species from JRC 
+    based on growth curves calculation 
+    to the LUT.
+    """
+    # Open the JRC LUT based on yield information
+    df_JRC_LUT = settings.get('JRC_LUT')
+    
+    # now open the excel file containing the yield
+    # information for some additional species
+    dir_excel = settings.get('CONFIG_SPECS').get('yield_table_ms_sp')
+    # Net annual increment (I)
+    df_I = get_sheet(dir_excel, 'NAI_add_species')
+    # Get average, min and max
+    df_I = df_I.rename(columns={'Avg': 'Iv_0-20',
+                                'Min': 'Iv_0-20_min',
+                                'Max': 'Iv_0-20_max'})
+    # the increment is not specified per age
+    df_I['Iv_21-30'] = df_I['Iv_0-20'] * df_I.shape[0]
+    df_I['Iv_21-30_min'] = df_I['Iv_0-20_min'] * df_I.shape[0]
+    df_I['Iv_21-30_max'] = df_I['Iv_0-20_max'] * df_I.shape[0]
+
+    # Get per species and forest zone the yearly increment
+    
+
+    
 
 
 def get_LUT_forest_zone(settings):
@@ -269,13 +386,8 @@ def get_LUT_forest_zone(settings):
         lst_df_LUT_zones.append(df_NUTS_zone)
 
     df_NUTS_LUT_final = pd.concat(lst_df_LUT_zones)
+
     return df_NUTS_LUT_final
-
-
-
-
-
-    
 
 
 def _main_(settings):
@@ -287,7 +399,6 @@ def _main_(settings):
     outname_C_seq_LUT = 'LUT_C_SEQ_AFFOR_JRC_V2.csv'
     outname_forest_zone_LUT = 'LUT_FOREST_ZONE.csv'
     overwrite = settings.get('CONFIG_SPECS').get('overwrite')
-
     
     # C_seq LUT
     if not os.path.exists(os.path.join(outfolder, outname_C_seq_LUT)) or overwrite:
@@ -311,15 +422,6 @@ def _main_(settings):
 
 
 
-
-
-
-
-
-
-
-
-
 if __name__ == '__main__':
 
     logger.info('*' * 50)
@@ -329,7 +431,7 @@ if __name__ == '__main__':
         dir_signature)
 
     # define the directory of the yield table:
-    name_file = 'Growth_curves_JRC_Data_Collection_140923_EEA.xlsx'
+    name_file = 'Growth_curves_JRC_Data_Collection_140923_EEA_V2.xlsx'
     folder_table = os.path.join(Basefolder_strata, 
                                 'NUTS_LUT_afforestation_scenario',
                                 'JRC_yield_table')
@@ -347,7 +449,6 @@ if __name__ == '__main__':
                              'NUTS_RG_20M_2021_3035.shp')
     }
 
-    
     settings = {
                 'CONFIG_SPECS': CONFIGURATION_SPECS,
                 'VECTORS': VECTORS
