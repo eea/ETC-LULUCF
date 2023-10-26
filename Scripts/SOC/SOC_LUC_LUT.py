@@ -839,23 +839,22 @@ if __name__ == '__main__':
     # The DEM may not be set as the first dataset!!!!!
     # TODO check data
     DATASETS = {
-        'ENV': os.path.join(dir_signature, 'etc', 'lulucf', 'input_data',
+        'ENV': os.path.join(dir_signature, 'input',
                             'EnvZones', 'eea_r_3035_100_m_EnvZ-Metzger_2020_v1_r00.tif'),
-        'SLOPE':  os.path.join(dir_signature, 'etc', 'lulucf', 'refs', 'dem', 'DEM_slope_3035_100m_warped.tif'),
-        'LU': os.path.join(dir_signature, 'input_data', 'general',
-                           'CLCACC', 'CLC2018ACC_V2018_20.tif'),
-        'SOC': os.path.join(dir_signature, 'etc', 'lulucf', 'refs', 'isric', 'ocs_0-30cm_mean_3035_100m.tif')
+        'SLOPE':  os.path.join(dir_signature, 'input', 'DEM', 'DEM_slope_3035_100m_warped.tif'),
+        'LU': os.path.join(dir_signature, 'input', 'CLC_ACC', 'CLC2018ACC_V2018_20.tif'),
+        'SOC': os.path.join(dir_signature, 'input', 'IPCC_layers', 'soil', 'ipcc_soil_type_100m_EPSG3035_EEA39.tif')
     }
 
     # Below add some ancillary information 
     # like the land degradation layers
 
     ANCILLARY = {
-        'LDN_IMPROV': os.path.join(dir_signature, 'etc', 'lulucf', 'strata',
+        'LDN_IMPROV': os.path.join(dir_signature, 'input', 'strata',
                                    'SOC_LUC', 'LDN',
                                    'LDN_Improvement_220722.xlsx'),
 
-        'LDN_DEGR': os.path.join(dir_signature, 'etc', 'lulucf', 'strata',
+        'LDN_DEGR': os.path.join(dir_signature, 'input', 'strata',
                                    'SOC_LUC', 'LDN',
                                    'LDN_Degradation_0722.xlsx')
     }
@@ -883,7 +882,7 @@ if __name__ == '__main__':
 
     # If the  SOC sample data should not be retrieved
     #  anymore set this to false
-    retrieve_SOC_strata_kernel = True
+    retrieve_SOC_strata_kernel = False
 
     # Set to True if want to compile all the
     # SOC per strate to create a LUT

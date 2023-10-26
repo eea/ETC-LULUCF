@@ -15,18 +15,18 @@ dir_signature = WindowsPath('//cwsfileserver/projects/lulucf/f02_data/carbon_mod
 
 overwrite = False
 # folder which will be used for the output and in which all the LUT are stored
-Basefolder_strata = os.path.join(dir_signature, 'etc', 'lulucf', 'strata')
+Basefolder_strata = os.path.join(dir_signature, 'output', 'strata')
 
 
 Basefolder_input_data = os.path.join(
-    dir_signature, 'etc', 'lulucf', 'input_data')
-CLC_ACC_folder = os.path.join(dir_signature, 'input_data', 'general', 'CLCACC')
+    dir_signature, 'input')
+CLC_ACC_folder = os.path.join(dir_signature, 'input', 'CLC_ACC')
 # define the Tier type of method. Just one option is available right now: 'LUT'
 type_method = 'LUT'
 
 # the location of the map that identifies the boundaries of all NUTS regions
 shp_extent_map = os.path.join(
-    dir_signature, 'etc', 'lulucf', 'AOI', 'EEA39_extent_noDOM.shp')
+    dir_signature, 'input', 'AOI', 'EEA39_extent_noDOM.shp')
 
 
 # some paths towards ready-to-use input dataset
