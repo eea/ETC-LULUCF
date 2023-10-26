@@ -9,9 +9,9 @@ from rasterio import windows
 from pathlib import Path
 from osgeo import gdal
 import numpy as np
-import gdal
+from osgeo import gdal
 import subprocess
-import osr
+from osgeo import osr
 import pandas as pd
 import glob
 import geopandas as gpd
