@@ -23,7 +23,11 @@ import datetime
 from rasterstats import zonal_stats
 
 
+
+
+
 def define_affor_areas(settings, slope_max=87.5):
+    #logger.add("loguru_biom_helper_functions_define_affor_areas.log") # s4e
     """
     Function that will help in finding the potential afforestation areas based on CLC input, DEM (slope), N2K &
     external mask
@@ -31,7 +35,7 @@ def define_affor_areas(settings, slope_max=87.5):
     :param slope_max: the maximum slope under which afforestation can be applied
     :return: Map with a pixel-based indication where afforestation could be applied
     """
-
+    print("Feedback from define_affor_areas:.....................................")
     # load all the required rasters and check if they are present
     AFFORESTATION_MASK_DATASETS = settings.get(
         'DATASETS').get('AFFORESTATION_MASK')
@@ -44,15 +48,20 @@ def define_affor_areas(settings, slope_max=87.5):
     CLC_dir = AFFORESTATION_MASK_DATASETS.get('CLC')
 
     # DEM
+    print("DEM:")
     DEM_dir = AFFORESTATION_MASK_DATASETS.get('DEM')
     if not os.path.exists(DEM_dir):
+        print(DEM_dir)
         raise Exception
-
+    print(DEM_dir)
+    print("--------------------------------------------------------")
     # N2K
+    print("N2k:")
     N2K_dir = AFFORESTATION_MASK_DATASETS.get('N2K')
     if not os.path.exists(N2K_dir):
         N2K_dir_coarse_res = Path(N2K_dir).parent.joinpath(
             Path(N2K_dir).name.replace('_100m', ''))
+            #print("if 1")
         if os.path.exists(N2K_dir_coarse_res):
             # warp and resample the layer to the proper extent
             # and resolution based on a reference raster
@@ -62,14 +71,21 @@ def define_affor_areas(settings, slope_max=87.5):
                                    resample_factor=1, overwrite=settings.get("CONFIG_SPECS").get('overwrite'),
                                    resampling=True,
                                    outname=Path(N2K_dir).name)
+            #print("if 2")
         else:
+            print("else")
+            print(N2K_dir_coarse_res)
             raise Exception
-
-    # External mask (if some areas or not suitable for afforestation). 1 --> suitable. 0 --> not suitable
+    
+    #print(N2K_dir)
+    print("--------------------------------------------------------")
+    # Exter
+    # nal mask (if some areas or not suitable for afforestation). 1 --> suitable. 0 --> not suitable
     External_mask_dir = AFFORESTATION_MASK_DATASETS.get('external_mask')
 
     if External_mask_dir is not None:
         if not os.path.exists(External_mask_dir):
+            print(External_mask_dir)
             raise Exception
 
     # Start the masking
@@ -84,10 +100,7 @@ def define_affor_areas(settings, slope_max=87.5):
     # configuration applicable at EU scale
     if settings.get('CONFIG_SPECS').get('run_NUTS_SPECIFIC'):
         factor_scenario = get_factors_from_NUTS(
-            settings, factor_scenario, 'Slope', 
-            id_LUT_carbon_pool='afforestation', 
-            folder = os.path.join(settings.get('CONFIG_SPECS').get('NUTS_LUT_folder')),
-                                                     LU_specific=False)
+            settings, factor_scenario, 'Slope', id_LUT_carbon_pool='afforestation')
 
     # load the geometry of the NUTS region which is needed for block based opening of the rasters
     if not settings.get('NUTS3_info').geometry is None:
@@ -191,6 +204,7 @@ def define_affor_areas(settings, slope_max=87.5):
         # store the info needed for creating output mask layer
         meta_raster = src_CLC_raster
         transform_raster = src_CLC_raster.get('transform')
+
         meta_raster.update({'nodata': 255, 'dtype': 'uint8'})
 
         # Create factor raster to write out factors in it
@@ -227,6 +241,11 @@ def define_affor_areas(settings, slope_max=87.5):
         # be actually used for afforestation
         mask_raster[loc_strata] = 0
 
+        logger.info(f'Hilfe -hilfe ')
+        write_raster(loc_affor_option, meta_raster,
+                     transform_raster, r"L:\f02_data\carbon_model_data\output\testing", "test.tif")  #s4e
+
+
         # the external mask will add some additional areas even if not suitable
         mask_raster[External_mask_raster == 1] = 1  # 1 is suitable
 
@@ -246,7 +265,7 @@ def define_affor_areas(settings, slope_max=87.5):
         # if N2K set back to zero (PRIORITY!!!!):
         # Only for those where the CLC class is valid
         loc_mask_N2K = np.where((N2K_raster == 1) & (CLC_LUCAT_raster == 1))
-        mask_raster[loc_mask_N2K] = 0
+        mask_raster[loc_mask_N2K] = 0 ### OK unti here..66  # original: 0
 
         ########## TODO: ETC/DI #############
 
@@ -287,6 +306,10 @@ def define_affor_areas(settings, slope_max=87.5):
         mask_raster, _ = open_raster_from_window(
             outdir_mask.joinpath(outname_mask), bounds)
         return mask_raster
+
+
+
+
 
 
 def create_affor_potential(settings, affor_mask_array):
