@@ -17,18 +17,24 @@ import numpy as np
 from pathlib import Path
 import rasterio
 import pandas as pd
-from SOC_scenarios.utils.spark import get_spark_sql
-from SOC_scenarios.utils.soc_helper_functions import (
-    window_generation, define_processing_grid)
 from loguru import logger as log
 from itertools import product
 from ast import literal_eval
 import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.colors as mcolors
+import sys
 matplotlib.use('Agg')
 
+# the below line works only if current working directory is ETC-LULUCF
+# adapt it if running the script from another directory
+sys.path.append(Path(os.getcwd()).joinpath('src').as_posix())
+print(sys.path)
+# from SOC_scenarios.utils.spark import get_spark_sql
+from SOC_scenarios.utils.soc_helper_functions import (
+    window_generation, define_processing_grid)
 
+@log.catch()
 def create_hist(lst_input: list, dict_printing_stats: dict, outname: str,
                 outfolder: str, label: str, label_x: str = 'DOY of prediction', title=False, title_str=None):
 
@@ -61,6 +67,7 @@ def create_hist(lst_input: list, dict_printing_stats: dict, outname: str,
     plt.close()
 
 
+@log.catch()
 def _get_LUT_strata(strata, lst_data,
                     df_strata_info, settings,
                     LUC_stats='SOC'):
@@ -131,7 +138,7 @@ def _get_LUT_strata(strata, lst_data,
 
     return strata, [(df_strata_stats), (df_cdf)]
 
-
+@log.catch()
 def _get_stats_window(window, settings, df_stratification):
     # Iterate through the datasets and store the corresponding stats in a NPZ format
     dict_stats = {}
@@ -210,7 +217,7 @@ def _get_stats_window(window, settings, df_stratification):
         log.info(f'Writing sample for: {window_id}')
         np.savez(os.path.join(outfolder, window_id + '.npz'), **dict_stats)
 
-
+@log.catch()
 def create_df_strata(lst_comb, cols, type_column=None):
     df_strata = pd.DataFrame(lst_comb)
     df_strata.columns = cols
@@ -220,7 +227,7 @@ def create_df_strata(lst_comb, cols, type_column=None):
 
     return df_strata
 
-
+@log.catch()
 def plot_cdf(dict_CDF, outfolder_hist,
              outname, param_asses,
              merge=True):
@@ -293,7 +300,7 @@ def plot_cdf(dict_CDF, outfolder_hist,
     fig.savefig(os.path.join(outfolder_hist, outname))
     plt.close()
 
-
+@log.catch()
 def get_cdf(data, bins):
     # get now the CDF of the distribution
     count, bins_image = np.histogram(data, bins=bins)
@@ -306,7 +313,7 @@ def get_cdf(data, bins):
 
     return cdf, bins_image
 
-
+@log.catch()
 def get_conversion_LUT_strata(df, to_class_NAME, 
                               settings,
                               df_LDN_info = None,
@@ -402,7 +409,7 @@ def get_conversion_LUT_strata(df, to_class_NAME,
 
     return df_filter
 
-
+@log.catch()
 def _cdf_strata(df_strata, dataset_options, dataset,
                 LEVEL_LUC, outfolder_CDF, lst_data,
                 data_folder, merge=True, overwrite=False):
@@ -481,7 +488,7 @@ def _cdf_strata(df_strata, dataset_options, dataset,
                  outfolder_CDF, outname_unique,
                  dataset, merge=False)
 
-
+@log.catch()
 def main_SOC_analysis(settings, sql=None):
 
     # First check if stratification classes are already generated
@@ -818,6 +825,7 @@ if __name__ == '__main__':
     # for setting permission correctly
     oldmask = os.umask(0o002)
 
+    log.add('SOC_LUC_LUT_test.log')
     log.info('*' * 50)
 
     from constants import (
@@ -825,7 +833,11 @@ if __name__ == '__main__':
         CLC_IPCC_mapping_refinement,
         Env_zones_mapping)
 
+    log.info(f'base path for data: {dir_signature}')
+    # dir_signature = WindowsPath('//cwsfileserver/projects/lulucf/f02_data/carbon_model_data')
+
     # The DEM may not be set as the first dataset!!!!!
+    # TODO check data
     DATASETS = {
         'ENV': os.path.join(dir_signature, 'etc', 'lulucf', 'input_data',
                             'EnvZones', 'eea_r_3035_100_m_EnvZ-Metzger_2020_v1_r00.tif'),
@@ -862,7 +874,7 @@ if __name__ == '__main__':
     Level_crosswalk = 'SOC_classif'
 
     # Define the output folder where the statistics will be stored
-    outfolder_SOC_LUC = os.path.join(dir_signature, 'etc', 'lulucf',
+    outfolder_SOC_LUC = os.path.join(dir_signature, 'output',
                                      'strata', 'SOC_LUC')
 
     overwrite = False
@@ -871,7 +883,7 @@ if __name__ == '__main__':
 
     # If the  SOC sample data should not be retrieved
     #  anymore set this to false
-    retrieve_SOC_strata_kernel = False
+    retrieve_SOC_strata_kernel = True
 
     # Set to True if want to compile all the
     # SOC per strate to create a LUT
@@ -892,7 +904,7 @@ if __name__ == '__main__':
 
     create_conversion_table = True
 
-    # specify if the land cover flow should be lined with 
+    # specify if the land cover flow should be lined with Level_LUC_classes
     # the land degradation work that defines per flow the 
     # impact on biodiversity, carbon seq and harmonze the naming of the flow
 
@@ -919,7 +931,8 @@ if __name__ == '__main__':
     ###########################################
     # First deal with the spark stuff
     if not run_local:
-        sql = get_spark_sql(local=run_local)
+        # sql = get_spark_sql(local=run_local)
+        print("error")
     else:
         sql = None
 

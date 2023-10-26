@@ -353,7 +353,8 @@ if __name__ == '__main__':
 
     ### Country_running
     Country = None #set to None if want to run entire EEA39 extent
-    shp_NUTS_borders = gpd.read_file(os.path.join(dir_signature, 'etc','lulucf','AOI','NUTS_RG_20M_2021_3035.shp'))
+    # TODO update path to nuts
+    shp_NUTS_borders = gpd.read_file(os.path.join(dir_signature, 'input','NUTS','NUTS_RG_20M_2021_3035.shp'))
 
 
 
