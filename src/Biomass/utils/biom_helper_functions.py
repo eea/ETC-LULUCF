@@ -61,7 +61,7 @@ def define_affor_areas(settings, slope_max=87.5):
     if not os.path.exists(N2K_dir):
         N2K_dir_coarse_res = Path(N2K_dir).parent.joinpath(
             Path(N2K_dir).name.replace('_100m', ''))
-            #print("if 1")
+        print("if 1")
         if os.path.exists(N2K_dir_coarse_res):
             # warp and resample the layer to the proper extent
             # and resolution based on a reference raster
@@ -71,13 +71,13 @@ def define_affor_areas(settings, slope_max=87.5):
                                    resample_factor=1, overwrite=settings.get("CONFIG_SPECS").get('overwrite'),
                                    resampling=True,
                                    outname=Path(N2K_dir).name)
-            #print("if 2")
+            print("if 2")
         else:
             print("else")
             print(N2K_dir_coarse_res)
             raise Exception
     
-    #print(N2K_dir)
+    print(N2K_dir)
     print("--------------------------------------------------------")
     # Exter
     # nal mask (if some areas or not suitable for afforestation). 1 --> suitable. 0 --> not suitable
@@ -233,17 +233,14 @@ def define_affor_areas(settings, slope_max=87.5):
 
         # Now filter on the locations for afforestation
 
-        loc_affor_option = np.where((DEM_raster >= slope_min) & (DEM_raster < slope_max)
-                                    & (CLC_LUCAT_raster == 1) & (N2K_raster == 255))
-
+        loc_affor_option = np.asarray((DEM_raster >= slope_min) & (DEM_raster < slope_max)
+                                    & (CLC_LUCAT_raster == 1) & (N2K_raster == 255)).nonzero()
+        
         # set all the LU pixels to no afforestation initially
         # this helps to trace how much of the suitable LUCAT can
         # be actually used for afforestation
         mask_raster[loc_strata] = 0
 
-        logger.info(f'Hilfe -hilfe ')
-        write_raster(loc_affor_option, meta_raster,
-                     transform_raster, r"L:\f02_data\carbon_model_data\output\testing", "test.tif")  #s4e
 
 
         # the external mask will add some additional areas even if not suitable
@@ -251,7 +248,6 @@ def define_affor_areas(settings, slope_max=87.5):
 
         # set the ones that could be afforested to one
         mask_raster[loc_affor_option] = 1
-
         ########## TODO: ETC/DI #############
 
         """

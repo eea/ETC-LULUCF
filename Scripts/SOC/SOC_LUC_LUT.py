@@ -24,12 +24,15 @@ import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.colors as mcolors
 import sys
+import dask.dataframe as dd
+from dask import compute
+from dask.distributed import Client, LocalCluster
 matplotlib.use('Agg')
 
 # the below line works only if current working directory is ETC-LULUCF
 # adapt it if running the script from another directory
-sys.path.append(Path(os.getcwd()).joinpath('src').as_posix())
-print(sys.path)
+sys.path.append(Path(os.getcwd()).parent.joinpath('src').as_posix())
+
 # from SOC_scenarios.utils.spark import get_spark_sql
 from SOC_scenarios.utils.soc_helper_functions import (
     window_generation, define_processing_grid)
@@ -138,15 +141,48 @@ def _get_LUT_strata(strata, lst_data,
 
     return strata, [(df_strata_stats), (df_cdf)]
 
-@log.catch()
+# @log.catch()
+def process_row(row, settings={}, stratification='path'):
+    Level_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
+
+    outfolder = os.path.join(settings.get("outfolder"),
+                            "stratification", "inputs",
+                            Level_LUC)
+
+    # skip window if it was already computed
+    if os.path.exists(os.path.join(outfolder, row.window_id + '.npz')):
+        # log.info(f'npz file for window {row.window_id} already exists')
+        return row.window_id
+    else:
+    
+        # log.info(f"Start process row {row.window_id}")
+        df_full_stratification = pd.read_csv(stratification)
+        window_id = row.window_id
+        x_coords = (row.x0, row.x1)
+        y_coords = (row.y0, row.y1)
+        _get_stats_window((x_coords, y_coords), settings, df_full_stratification)
+        return window_id
+
+
+# @log.catch()
 def _get_stats_window(window, settings, df_stratification):
     # Iterate through the datasets and store the corresponding stats in a NPZ format
     dict_stats = {}
 
+    Level_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
+
     window_id = f'{window[0][0]}_{window[0][1]}_' \
         f'{window[1][0]}_{window[1][1]}'
+    
+    outfolder = os.path.join(settings.get("outfolder"),
+                            "stratification", "inputs",
+                            Level_LUC)
 
-    Level_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
+    # skip window if it was already computed
+    if os.path.exists(os.path.join(outfolder, window_id + '.npz')):
+        # log.info(f'npz file for window {window} already exists')
+        return
+    
 
     for i, strata in df_stratification.iterrows():
         lst_loc_strata = []
@@ -158,11 +194,10 @@ def _get_stats_window(window, settings, df_stratification):
                 'DATASETS').get(dataset)).profile.get('nodata')
             if nodatavalue is None:
                 nodatavalue = 0
-            values_dataset = rasterio.open(settings.get(
-                'DATASETS').get(dataset)).read(1, window=window)
+            ds = settings.get( 'DATASETS').get(dataset)
+            values_dataset = rasterio.open(ds).read(1, window=window)
             if np.all([values_dataset == nodatavalue]) and idx_dataset == 0:
-                log.warning(
-                    f'NO STRATIFICATION COULD BE DONE FOR WINDOW {window} DUE TO NO VALID VALUES')
+                # log.warning(f'NO STRATIFICATION COULD BE DONE FOR WINDOW {window} DUE TO NO VALID VALUES (nodata values)')
                 return
             # Check if the window is not partially located at a border for where no data is available
             if idx_dataset == 0:
@@ -210,9 +245,6 @@ def _get_stats_window(window, settings, df_stratification):
 
     # Write to a NPZ file in the end per window
     if dict_stats:
-        outfolder = os.path.join(settings.get("outfolder"),
-                                 "stratification", "inputs",
-                                 Level_LUC)
         os.makedirs(outfolder, exist_ok=True)
         log.info(f'Writing sample for: {window_id}')
         np.savez(os.path.join(outfolder, window_id + '.npz'), **dict_stats)
@@ -540,6 +572,9 @@ def main_SOC_analysis(settings, sql=None):
     # Open the stratification file needed for extracting the values per window
     df_full_stratification = pd.read_csv(os.path.join(
         settings.get('outfolder'), 'stratification', outname))
+    
+    stratification_path = os.path.join(
+        settings.get('outfolder'), 'stratification', outname)
 
     if settings.get('Retrieve_SOC_kernel'):
 
@@ -566,7 +601,7 @@ def main_SOC_analysis(settings, sql=None):
         # if not locally processed
 
         if sql is None:
-            for i, row in df.iterrows():
+            for i, row in df[72342:].iterrows():
                 log.info(
                     f'Processing window {str(i)} out of {str(df.shape[0])}')
                 # if ((row.x0, row.x1), (row.y0, row.y1)) == ((768, 896), (40448, 40576)):
@@ -577,20 +612,34 @@ def main_SOC_analysis(settings, sql=None):
                     df_full_stratification
                 )
         else:
-            df_spark = sql.createDataFrame(df).persist()
+            # df_spark = sql.createDataFrame(df).persist()
 
             log.info('Start processing patch extraction on the executors ...')
-            sc_output = df_spark.repartition(len(df)) \
-                .rdd.map(lambda row: (row.window_id,
-                                      _get_stats_window(((row.x0, row.x1),
-                                                         (row.y0, row.y1)),
-                                                        settings,
-                                                        df_full_stratification)))\
-                .collectAsMap()
+            # sc_output = df_spark.repartition(len(df)) \
+            #     .rdd.map(lambda row: (row.window_id,
+            #                           _get_stats_window(((row.x0, row.x1),
+            #                                              (row.y0, row.y1)),
+            #                                             settings,
+            #                                             df_full_stratification)))\
+            #     .collectAsMap()
 
-            df_spark.unpersist()
+            # df_spark.unpersist()
 
-        log.success('All kernel rerieval done!')
+            cluster = LocalCluster()
+            client=Client(address=cluster)
+            print(str(client))
+            dask_df = dd.from_pandas(df[62054:], npartitions=8)
+            # Apply the processing function to each row
+            dask_output = dask_df.apply(process_row, settings=settings, stratification=stratification_path, axis=1, meta=(None, 'string'))
+            # dask_output = dask_df.map_partitions(lambda row: row.apply(process_row, settings=settings, stratification=df_full_stratification), meta=(None, 'string'))
+
+            # Compute the result
+            dask_output_result = dask_output.compute()
+
+            # Convert the Dask output to a dictionary
+            dask_output_dict = dict(dask_output_result)
+
+            log.success('All kernel rerieval done!')
 
     if settings.get('Compile_SOC_LUT'):
         log.info('START COMPILING ALL DATA PER STRATA')
@@ -882,7 +931,7 @@ if __name__ == '__main__':
 
     # If the  SOC sample data should not be retrieved
     #  anymore set this to false
-    retrieve_SOC_strata_kernel = False
+    retrieve_SOC_strata_kernel = True
 
     # Set to True if want to compile all the
     # SOC per strate to create a LUT
@@ -932,6 +981,10 @@ if __name__ == '__main__':
     if not run_local:
         # sql = get_spark_sql(local=run_local)
         print("error")
+        # Start a local Dask cluster with 4 workers and 1 thread per worker
+        # Connect a Dask client to the cluster
+        sql='dask'
+        
     else:
         sql = None
 
