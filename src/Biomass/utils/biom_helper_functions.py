@@ -25,8 +25,20 @@ from rasterstats import zonal_stats
 
 
 
-
 def define_affor_areas(settings, slope_max=87.5):
+
+    Basefolder_mask = Path(settings.get('CONFIG_SPECS').get('Basefolder_output')
+                           ).joinpath('Afforestation_mask')
+    outdir_mask = Path(Basefolder_mask).joinpath(
+            settings.get('NUTS3_info')['CNTR_CODE'])
+    outname_mask = f'Afforestation_mask_{str(settings.get("SCENARIO_SPECS").get("Year_baseline"))}_' \
+                    f'{settings.get("NUTS3_info")["NUTS_ID"]}_{settings["SCENARIO_SPECS"]["lst_CLC_affor_name"]}.tif'
+    if os.path.exists(outdir_mask.joinpath(outname_mask)):
+        logger.info("Mask already exists")
+        bounds = settings.get('NUTS3_info').geometry.bounds
+        mask_raster, _ = open_raster_from_window(
+            outdir_mask.joinpath(outname_mask), bounds)
+        return mask_raster
     #logger.add("loguru_biom_helper_functions_define_affor_areas.log") # s4e
     """
     Function that will help in finding the potential afforestation areas based on CLC input, DEM (slope), N2K &
@@ -35,7 +47,6 @@ def define_affor_areas(settings, slope_max=87.5):
     :param slope_max: the maximum slope under which afforestation can be applied
     :return: Map with a pixel-based indication where afforestation could be applied
     """
-    print("Feedback from define_affor_areas:.....................................")
     # load all the required rasters and check if they are present
     AFFORESTATION_MASK_DATASETS = settings.get(
         'DATASETS').get('AFFORESTATION_MASK')
@@ -48,20 +59,16 @@ def define_affor_areas(settings, slope_max=87.5):
     CLC_dir = AFFORESTATION_MASK_DATASETS.get('CLC')
 
     # DEM
-    print("DEM:")
     DEM_dir = AFFORESTATION_MASK_DATASETS.get('DEM')
     if not os.path.exists(DEM_dir):
         print(DEM_dir)
         raise Exception
     print(DEM_dir)
-    print("--------------------------------------------------------")
     # N2K
-    print("N2k:")
     N2K_dir = AFFORESTATION_MASK_DATASETS.get('N2K')
     if not os.path.exists(N2K_dir):
         N2K_dir_coarse_res = Path(N2K_dir).parent.joinpath(
             Path(N2K_dir).name.replace('_100m', ''))
-        print("if 1")
         if os.path.exists(N2K_dir_coarse_res):
             # warp and resample the layer to the proper extent
             # and resolution based on a reference raster
@@ -71,16 +78,11 @@ def define_affor_areas(settings, slope_max=87.5):
                                    resample_factor=1, overwrite=settings.get("CONFIG_SPECS").get('overwrite'),
                                    resampling=True,
                                    outname=Path(N2K_dir).name)
-            print("if 2")
         else:
-            print("else")
-            print(N2K_dir_coarse_res)
             raise Exception
     
-    print(N2K_dir)
-    print("--------------------------------------------------------")
-    # Exter
-    # nal mask (if some areas or not suitable for afforestation). 1 --> suitable. 0 --> not suitable
+
+    # External mask (if some areas or not suitable for afforestation). 1 --> suitable. 0 --> not suitable
     External_mask_dir = AFFORESTATION_MASK_DATASETS.get('external_mask')
 
     if External_mask_dir is not None:
@@ -91,6 +93,9 @@ def define_affor_areas(settings, slope_max=87.5):
     # Start the masking
     # load the configuration for the afforestation mask
     factor_scenario = settings.get('SCENARIO_SPECS').get('afforestation_config')
+
+    # get the land use selection (cropland, grassland or both)
+    land_use_selection = settings.get('SCENARIO_SPECS').get('lst_CLC_affor_name')
 
     overwrite = settings.get('CONFIG_SPECS').get('overwrite')
 
@@ -122,12 +127,12 @@ def define_affor_areas(settings, slope_max=87.5):
         if not settings.get('CONFIG_SPECS').get('block_based_processing'):
             outdir_mask = Path(Basefolder_mask).joinpath(
                 settings.get('CONFIG_SPECS').get('Country'))
-            outname_mask = f'Afforestation_mask_{str(settings.get("SCENARIO_SPECS").get("Year_baseline"))}_{settings.get("CONFIG_SPECS").get("Country")}.tif'
+            outname_mask = f'Afforestation_mask_{str(settings.get("SCENARIO_SPECS").get("Year_baseline"))}_{settings.get("CONFIG_SPECS").get("Country")}_{land_use_selection}.tif'
         else:
             outdir_mask = Path(Basefolder_mask).joinpath(
                 settings.get('NUTS3_info')['CNTR_CODE'])
             outname_mask = f'Afforestation_mask_{str(settings.get("SCENARIO_SPECS").get("Year_baseline"))}_' \
-                           f'{settings.get("NUTS3_info")["NUTS_ID"]}.tif'
+                           f'{settings.get("NUTS3_info")["NUTS_ID"]}_{land_use_selection}.tif'
 
     outdir_mask.mkdir(parents=True, exist_ok=True)
 
@@ -316,6 +321,9 @@ def create_affor_potential(settings, affor_mask_array):
     :return: raster with the carbon potential if a certain pixel is afforested
     """
 
+    if(affor_mask_array is None):
+        logger.warning(f'NO PIXEL DATA AVAILABLE FOR NUTS REGION: {settings.get("NUTS3_info").NUTS_ID}')
+        return None, None
     # load the defined settings of the afforestation area
     AFFORESTATION_CONFIG = settings.get(
         'SCENARIO_SPECS').get('afforestation_config')
@@ -346,7 +354,7 @@ def create_affor_potential(settings, affor_mask_array):
             outdir_affor_pot = Basefolder_affor_potential \
                 .joinpath(settings.get('NUTS3_info')['CNTR_CODE']).as_posix()
             outname_affor_pot = f'{carbon_pool}_{settings.get("CONFIG_SPECS").get("scenario_name")}' \
-                                f'_{settings.get("NUTS3_info")["NUTS_ID"]}.tif'
+                                f'_{settings.get("NUTS3_info")["NUTS_ID"]}_{AFFORESTATION_CONFIG.get("Tree_species")}.tif'
 
     os.makedirs(outdir_affor_pot, exist_ok=True)
     affor_pot_dir = os.path.join(outdir_affor_pot, outname_affor_pot)
@@ -361,7 +369,7 @@ def create_affor_potential(settings, affor_mask_array):
         # ignore empty regions
         logger.info(
             f'NO GEOMETRY PROVIDED FOR AREA {settings.get("NUTS3_info").NUTS_ID}')
-        return None
+        return None, None
 
     if not os.path.exists(affor_pot_dir) or overwrite:
         # TODO write scaling factor in metadata of raster
@@ -371,9 +379,9 @@ def create_affor_potential(settings, affor_mask_array):
         if settings.get('CONFIG_SPECS').get('block_based_processing'):
             # block based opening of raster(s)
             if affor_mask_array.size == 0:
-                logger.info(
+                logger.warning(
                     f'NO PIXEL DATA AVAILABLE FOR NUTS REGION: {settings.get("NUTS3_info").NUTS_ID}')
-                return None
+                return None, None
 
             CLC_LUCAT_raster, src_CLC_raster = open_raster_from_window(
                 CLC_dir, bounds)
@@ -436,7 +444,7 @@ def create_affor_potential(settings, affor_mask_array):
             # search the forest zone
             if not NUTS3_ID in df_LUT_forest_zones.NUTS_LEVEL3_ID.to_list():
                 logger.warning(f'No forest zone information for {NUTS3_ID}')
-                return None, None
+                return -1,-1
 
             Forest_zone = df_LUT_forest_zones.loc[df_LUT_forest_zones['NUTS_LEVEL3_ID'] == NUTS3_ID]['FOREST_ZONE'].values[0]
             
@@ -466,8 +474,11 @@ def create_affor_potential(settings, affor_mask_array):
                 EU4Trees_prob_select = [item for item in EU4Trees_prob_select if  RCP_scenario in Path(item).stem]
 
                 if len(EU4Trees_prob_select) == 0:
-                    raise Exception(f'Problem with loading tree species prob layer for '
-                                    f'{settings.get("NUTS3_info").NUTS_ID}')
+                    # raise Exception(f'Problem with loading tree species {tree_species} prob layer for '
+                    #                 f'{settings.get("NUTS3_info").NUTS_ID}')
+                    logger.info(f'Problem with loading tree species {tree_species} prob layer for '
+                                     f'{settings.get("NUTS3_info").NUTS_ID}')
+                    return None,None
 
                 # Open the tree probability rasters
                 lst_prob_rasters = []
