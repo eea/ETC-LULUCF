@@ -245,13 +245,13 @@ def nuts_wrapper(row, settings):
     logger.info(f'{row.NUTS_ID} Define settings for NUTS' )
     # define settings for this nuts
     settings_nuts = settings.copy()
-    NUTS_layer = gpd.read_file(settings.get('DATASETS').get('VECTORS').get('NUTS'))
-    NUTS3_region = NUTS_layer.loc[((NUTS_layer.LEVL_CODE == 3) & (NUTS_layer.NUTS_ID == row.NUTS_ID))].iloc[0,:]
+    # NUTS_layer = gpd.read_file(settings.get('DATASETS').get('VECTORS').get('NUTS'))
+    # NUTS3_region = NUTS_layer.loc[((NUTS_layer.LEVL_CODE == 3) & (NUTS_layer.NUTS_ID == row.NUTS_ID))].iloc[0,:]
     settings_nuts['NUTS_region'] = row.NUTS_ID
-    settings_nuts['NUTS3_info'] = NUTS3_region
+    settings_nuts['NUTS3_info'] = row
 
     outfolder = Path(settings.get('CONFIG_SPECS').get('Basefolder_output')).joinpath(
-                    f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_NUTS_stats')
+                    f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_NUTS_stats_2')
     outname = f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_stats_NUTS_EEA39_{settings.get("CONFIG_SPECS").get("scenario_name")}_{row.NUTS_ID}.csv'
     if(os.path.exists(Path(outfolder).joinpath(outname))):
         logger.info(f'{row.NUTS_ID} Statistics already exist')
@@ -328,10 +328,8 @@ def nuts_wrapper(row, settings):
         pd.DataFrame(data=[]).to_csv(Path(outfolder).joinpath(outname))
         return pd.DataFrame(data=[])
 
-
-
 if __name__ == '__main__':
-    logger.add('LB_increase_afforestation_grassland_cropland_IPCCTier2_V20231002_5.log')
+    # logger.add('LB_increase_afforestation_grassland_cropland_IPCCTier2_V20231002_dask.log')
     logger.info("Get general settings")
     settings = get_settings()
 
@@ -343,8 +341,10 @@ if __name__ == '__main__':
 
     # filter only on the NUTS levels of interest
     shp_NUTS = shp_NUTS.loc[shp_NUTS.LEVL_CODE == 3] #only select NUTS3
-    # ddf = dask_geopandas.from_geopandas(shp_NUTS, npartitions=8)
+    ddf = dask_geopandas.from_geopandas(shp_NUTS, npartitions=16)
     # ddf = ddf.spatial_shuffle()
-    # stats = ddf.apply(lambda row: nuts_wrapper(row, settings), axis=1, meta=('x', 'object'))
-    stats = shp_NUTS[500:999].apply(lambda row: nuts_wrapper(row, settings), axis=1)
-    # stats.to_csv('output_afforestation.csv')
+    # client = Client('tcp://127.0.0.1:49835')
+    client=Client()
+    stats = ddf.apply(lambda row: nuts_wrapper(row, settings), axis=1, meta=('x', 'object')).compute()
+    # stats = shp_NUTS[:500].apply(lambda row: nuts_wrapper(row, settings), axis=1)
+    client.shutdown()
