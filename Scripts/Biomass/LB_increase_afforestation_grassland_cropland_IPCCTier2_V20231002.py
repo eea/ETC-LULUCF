@@ -28,7 +28,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine.url import URL
 import json
 import dask_geopandas
-from dask.distributed import LocalCluster, Client
+from dask.distributed import LocalCluster, Client, performance_report
 
 ### location of the code to run the scenarios
 sys.path.append(Path(os.getcwd()).joinpath('src').as_posix())
@@ -47,8 +47,8 @@ from Biomass.run_afforestation_scenario import afforestation_LUT_block_proc
 @logger.catch()
 def get_settings():
     logger.info('Get settings')
-    Year_potential = 2035
-    Year_baseline = 2023
+    # Year_potential = 2035
+    Year_baseline = 2024
 
     # define which management action is applied
     mng_option = 'afforestation'
@@ -67,12 +67,12 @@ def get_settings():
             'Tree_prob': 70,
             'Tree_species': 'Betula_pendula', #TODO 36 tree species
             'Perc_reforest': 10, # TODO afforestation intensity
-            'Year_potential': Year_potential,
+            # 'Year_potential': Year_potential,
             'input_source': 'EEA39'}
 
     SCENARIO_SPECS = {
             'mng_option': mng_option, 
-            'Year_potential': Year_potential,
+            # 'Year_potential': Year_potential,
             'Year_baseline': Year_baseline,
             'carbon_pool': carbon_pool, # Living biomass pool
             'lst_CLC_affor': lst_CLC_afforestation,
@@ -94,7 +94,8 @@ def get_settings():
 
     # suffix of the output raster and ID that is
     # used to distinguish different scenario runs
-    scenario_name = f'Scenario_JRCV3_{str(Year_potential)}_fix'
+    # TODO fix
+    scenario_name = f'Scenario_JRCV3_{str(2035)}_fix'
 
     # if want to run with some NUTS specific factors
     # set the below parameter to true
@@ -154,9 +155,9 @@ def get_settings():
 
     # Define processing extent
     ## location with the EEA39 extent
-    EEA_extent_layer = gpd.read_file(os.path.join(Basefolder_input_data, 'AOI', 'EEA39_extent_noDOM.shp'))
-    VECTORS = {'NUTS':os.path.join(Basefolder_input_data, 'NUTS', 'NUTS_RG_20M_2021_3035.shp'),
-            'EEA_extent': EEA_extent_layer}
+    # EEA_extent_layer = gpd.read_file(os.path.join(Basefolder_input_data, 'AOI', 'EEA39_extent_noDOM.shp'))
+    VECTORS = {'NUTS':os.path.join(Basefolder_input_data, 'NUTS', 'NUTS_RG_20M_2021_3035.shp')}
+            # 'EEA_extent': EEA_extent_layer}
 
     # Below define the locations of the rasters needed for the afforestation mask
 
@@ -251,7 +252,7 @@ def nuts_wrapper(row, settings):
     settings_nuts['NUTS3_info'] = row
 
     outfolder = Path(settings.get('CONFIG_SPECS').get('Basefolder_output')).joinpath(
-                    f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_NUTS_stats_2')
+                    f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_NUTS_stats')
     outname = f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_stats_NUTS_EEA39_{settings.get("CONFIG_SPECS").get("scenario_name")}_{row.NUTS_ID}.csv'
     if(os.path.exists(Path(outfolder).joinpath(outname))):
         logger.info(f'{row.NUTS_ID} Statistics already exist')
@@ -272,40 +273,48 @@ def nuts_wrapper(row, settings):
        'Quercus_coccifera', 'Salix_alba', 'Ulmus_minor'] 
     # # TODO define settings variants
     lst_NUTS_stats = []
-    for classes, land_use_selection in [[[211, 212, 213, 231],'cropland_grassland'], [[211, 212, 213],'cropland'], [[231], 'grassland']]: #[[211, 212, 213], [231]]: # cropland or grassland
+    for classes, land_use_selection in [[[211, 212, 213],'cropland'], [[231], 'grassland']]:  # cropland or grassland
         settings_nuts['SCENARIO_SPECS']['lst_CLC_affor'] = classes
         settings_nuts['SCENARIO_SPECS']['lst_CLC_affor_name'] = land_use_selection
         # afforestation mask depends only on land use
         logger.info(f'{row.NUTS_ID} Compute afforestation mask for land use selection: {land_use_selection}')
         affor_mask_layer = define_affor_areas(settings_nuts)
 
-        for intensity in [10, 20, 50]:
-            settings_nuts['SCENARIO_SPECS']['afforestation_config']['Perc_reforest'] = intensity
-            logger.info(f'{row.NUTS_ID} Compute scenario with % reforestation = {intensity}')
-            for tree in tree_species:
-                logger.info(f'{row.NUTS_ID}  Compute scenario with tree species = {tree}')
-                settings_nuts['SCENARIO_SPECS']['afforestation_config']['Tree_species'] = tree
-                
-                logger.info(f'{row.NUTS_ID} Compute afforestation potential')
-                affor_potential_layer, outname_affor_pot = create_affor_potential(settings_nuts, affor_mask_layer)
+        # for intensity in [10, 20, 50]:
+        # settings_nuts['SCENARIO_SPECS']['afforestation_config']['Perc_reforest'] = intensity
+        # logger.info(f'{row.NUTS_ID} Compute scenario with % reforestation = {intensity}')
+        for tree in tree_species:
+            logger.info(f'{row.NUTS_ID}  Compute scenario with tree species = {tree}')
+            settings_nuts['SCENARIO_SPECS']['afforestation_config']['Tree_species'] = tree
+            
+            logger.info(f'{row.NUTS_ID} Compute afforestation potential layer')
+            affor_potential_layer, outname_affor_pot = create_affor_potential(settings_nuts, affor_mask_layer)
 
-                if(affor_potential_layer is None):
-                    logger.warning(f'{row.NUTS_ID} {tree} {intensity} {land_use_selection} skipped')
-                elif(outname_affor_pot == -1): 
-                    logger.warning(f'Skipping region {row.NUTS_ID}')
-                    pd.DataFrame(data=[]).to_csv(Path(outfolder).joinpath(outname))
-                    return pd.DataFrame(data=[])
-                else:
-                    logger.info(f'{row.NUTS_ID} Compute stats')
-                    df_stats_NUTS = calc_stats_biomass_NUTS(os.path.join(
-                        settings_nuts.get('CONFIG_SPECS').get('Basefolder_output'),
-                        'LB_scenario', 
-                        settings_nuts.get('NUTS3_info')['CNTR_CODE'], 
-                        outname_affor_pot),
-                        settings_nuts.get('NUTS3_info'),
-                        settings_nuts)
-                    df_stats_NUTS['land_use_selection'] = land_use_selection
-                    lst_NUTS_stats.append(df_stats_NUTS)
+            if(affor_potential_layer is None):
+                logger.warning(f'{row.NUTS_ID} tree species: {tree} land use: {land_use_selection} skipped')
+                
+            elif(outname_affor_pot == -1): 
+                logger.warning(f'Skipping region {row.NUTS_ID}')
+                pd.DataFrame(data=[]).to_csv(Path(outfolder).joinpath(outname))
+                return pd.DataFrame(data=[])
+            else:
+                logger.info(f'{row.NUTS_ID} Compute stats')
+                for intensity in [10, 20, 50]:
+                    settings_nuts['SCENARIO_SPECS']['afforestation_config']['Perc_reforest'] = intensity
+                    logger.info(f'{row.NUTS_ID} Compute scenario with % reforestation = {intensity}')
+                    for year_potential in [2035, 2050]:
+                        logger.info(f'{row.NUTS_ID} Compute scenario with year_potential = {year_potential}')
+                        settings_nuts["SCENARIO_SPECS"]["Year_potential"] = year_potential
+                        df_stats_NUTS = calc_stats_biomass_NUTS(os.path.join(
+                            settings_nuts.get('CONFIG_SPECS').get('Basefolder_output'),
+                            'LB_scenario', 
+                            settings_nuts.get('NUTS3_info')['CNTR_CODE'], 
+                            outname_affor_pot),
+                            settings_nuts.get('NUTS3_info'),
+                            settings_nuts)
+                        df_stats_NUTS['land_use_selection'] = land_use_selection
+                        df_stats_NUTS['scenario_name'] = f"{intensity}_{tree}_{land_use_selection}"
+                        lst_NUTS_stats.append(df_stats_NUTS)
 
     # merge all the statistics of each NUTS-3 region
     # in a single summary dataframe
@@ -341,10 +350,15 @@ if __name__ == '__main__':
 
     # filter only on the NUTS levels of interest
     shp_NUTS = shp_NUTS.loc[shp_NUTS.LEVL_CODE == 3] #only select NUTS3
-    ddf = dask_geopandas.from_geopandas(shp_NUTS, npartitions=16)
+    # TODO filter NUTS with FOREST ZONE LUT 
+    df_LUT_forest_zones = pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('forest_zone_dir')))
+    shp_NUTS_filtered = shp_NUTS.loc[shp_NUTS.NUTS_ID.isin(df_LUT_forest_zones.NUTS_LEVEL3_ID) ]
+    ddf = dask_geopandas.from_geopandas(shp_NUTS_filtered, npartitions=8)
     # ddf = ddf.spatial_shuffle()
-    # client = Client('tcp://127.0.0.1:49835')
+ 
     client=Client()
-    stats = ddf.apply(lambda row: nuts_wrapper(row, settings), axis=1, meta=('x', 'object')).compute()
-    # stats = shp_NUTS[:500].apply(lambda row: nuts_wrapper(row, settings), axis=1)
+    print(client.dashboard_link)
+    with performance_report(filename="afforestation_dask-report.html"):
+        stats = ddf.apply(lambda row: nuts_wrapper(row, settings), axis=1, meta=('x', 'object')).compute()
+    # stats = shp_NUTS_filtered[:5].apply(lambda row: nuts_wrapper(row, settings), axis=1)
     client.shutdown()
