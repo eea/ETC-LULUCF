@@ -497,6 +497,12 @@ def get_conversion_LUT_strata(df, to_class_NAME,
                         continue
                     else:
                         lst_LDN_grouping.append(row_LDN[cols_LDN])
+            if not lst_LDN_grouping:
+                # jsut assing none to the different columns
+                df_LDN_empty = pd.DataFrame(df_LDN_info.iloc[0][cols_LDN]).T
+                df_LDN_empty.loc[:] = np.nan
+                lst_LDN_grouping.append(df_LDN_empty)
+                
             if lst_LDN_grouping:
                 # put into right format to 
                 # allow addition of LDN info
@@ -1034,13 +1040,13 @@ if __name__ == '__main__':
     # Please ensure that first the retrieval
     # of the data per kernel is finished
 
-    compile_SOC_LUT = True
+    compile_SOC_LUT = False
 
     # Set to True if want to run assessment
     # on the impact of the three selected
     # stratification layers on SOC
 
-    assess_impact_lyrs_SOC = True
+    assess_impact_lyrs_SOC = False
 
     # The final step is to create a from to
     # conversion table that expresses the
