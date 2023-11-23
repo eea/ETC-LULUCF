@@ -81,9 +81,9 @@ def afforestation_LUT_block_proc(settings: dict):
     # this is actually hard coded now, but the CLC layer of 2018 should be eventually used in the processing chain
     # the code expects that the CLC layer is already in the proper extent.
     CLC_ref_file = settings.get('DATASETS').get('AFFORESTATION_MASK').get('CLC')
-    # for prob_file in Prob_files_filtered:
-    #     align_raster_data_reference(
-    #         prob_file, CLC_ref_file, shp_NUTS, settings)
+    for prob_file in Prob_files_filtered:
+        align_raster_data_reference(
+            prob_file, CLC_ref_file, shp_NUTS, settings)
 
     # LOOP NOW over the available NUTS3 regions
     # in the area that is specified

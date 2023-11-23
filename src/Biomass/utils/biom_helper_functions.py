@@ -26,7 +26,13 @@ from rasterstats import zonal_stats
 
 
 def define_affor_areas(settings, slope_max=87.5):
-
+    """
+    Function that will help in finding the potential afforestation areas based on CLC input, DEM (slope), N2K &
+    external mask
+    :param settings: different parameters used to create the afforestation mask
+    :param slope_max: the maximum slope under which afforestation can be applied
+    :return: Map with a pixel-based indication where afforestation could be applied
+    """
     Basefolder_mask = Path(settings.get('CONFIG_SPECS').get('Basefolder_output')
                            ).joinpath('Afforestation_mask')
     outdir_mask = Path(Basefolder_mask).joinpath(
@@ -40,13 +46,6 @@ def define_affor_areas(settings, slope_max=87.5):
             outdir_mask.joinpath(outname_mask), bounds)
         return mask_raster
     #logger.add("loguru_biom_helper_functions_define_affor_areas.log") # s4e
-    """
-    Function that will help in finding the potential afforestation areas based on CLC input, DEM (slope), N2K &
-    external mask
-    :param settings: different parameters used to create the afforestation mask
-    :param slope_max: the maximum slope under which afforestation can be applied
-    :return: Map with a pixel-based indication where afforestation could be applied
-    """
     # load all the required rasters and check if they are present
     AFFORESTATION_MASK_DATASETS = settings.get(
         'DATASETS').get('AFFORESTATION_MASK')
@@ -219,7 +218,7 @@ def define_affor_areas(settings, slope_max=87.5):
         loc_strata = np.where(CLC_LUCAT_raster == 1)
 
         # the minimum slope at which afforestation may start
-        slope_min = AFFORESTATION_CONFIG.get('Slope')
+        slope_min = AFFORESTATION_CONFIG.get('Slope') # 0
 
         ########## TODO: ETC/DI #############
 
@@ -316,6 +315,7 @@ def define_affor_areas(settings, slope_max=87.5):
 def create_affor_potential(settings, affor_mask_array):
     """
     Function that will calculate the afforestation carbon potential and rasterize the output
+    Afforestation potential layer depends on land use selection and tree species selection
     :param settings: Different parameters used to create the afforestation potential map
     :param affor_mask_array: the array containing the suitable locations for afforestation
     :return: raster with the carbon potential if a certain pixel is afforested
@@ -354,7 +354,8 @@ def create_affor_potential(settings, affor_mask_array):
             outdir_affor_pot = Basefolder_affor_potential \
                 .joinpath(settings.get('NUTS3_info')['CNTR_CODE']).as_posix()
             outname_affor_pot = f'{carbon_pool}_{settings.get("CONFIG_SPECS").get("scenario_name")}' \
-                                f'_{settings.get("NUTS3_info")["NUTS_ID"]}_{AFFORESTATION_CONFIG.get("Tree_species")}.tif'
+                                f'_{settings.get("NUTS3_info")["NUTS_ID"]}_{settings["SCENARIO_SPECS"]["lst_CLC_affor_name"]}'\
+                                f'_{AFFORESTATION_CONFIG.get("Tree_species")}.tif'
 
     os.makedirs(outdir_affor_pot, exist_ok=True)
     affor_pot_dir = os.path.join(outdir_affor_pot, outname_affor_pot)
@@ -449,8 +450,9 @@ def create_affor_potential(settings, affor_mask_array):
             Forest_zone = df_LUT_forest_zones.loc[df_LUT_forest_zones['NUTS_LEVEL3_ID'] == NUTS3_ID]['FOREST_ZONE'].values[0]
             
             # search for any increment data
+            
             no_avail = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))].empty
-            if no_avail:
+            if no_avail:# TODO skip in the next iterations
                 logger.warning(f'No yield information available for {NUTS3_ID} in FOREST ZONE {Forest_zone} and species {tree_species}')
                 return None, None
             
@@ -459,7 +461,7 @@ def create_affor_potential(settings, affor_mask_array):
             RCP_scenario = AFFORESTATION_CONFIG.get('RCP')
             # the year for which the total biomass
             # increase should be calculated
-            Year_potential = AFFORESTATION_CONFIG.get('Year_potential')
+            # Year_potential = AFFORESTATION_CONFIG.get('Year_potential')
 
             # First check if we have the LUT tables to calculate the
             # volume increment for the requested tree species
@@ -725,7 +727,6 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
     # also take into account the percentage that should be
     # reforest for the total increase calculation
     if settings.get('CONFIG_SPECS').get('run_NUTS_SPECIFIC'):  # otherwise use default factors
-
         dict_perc_reforest_info = get_factors_from_NUTS(
             settings, AFFORESTATION_CONFIG, 'Perc_reforest',
             id_LUT_carbon_pool='afforestation',
@@ -797,7 +798,8 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
     df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_max_yrly_age_21_30'] = df_stats[
         f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_max_yrly_age_21_30']/scaling
 
-    df_stats = df_stats.round(2)
+    # TODO round to the closest upper digit
+    df_stats = df_stats.round(5)
 
     # the average LB increase for the NUTS region
     avg_value_LB_NUTS_age_0_20 = df_stats[f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_mean_yrly_age_0_20'].values[0]
@@ -900,7 +902,8 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
     df_stats['perc_reforest_src'] = dict_perc_reforest_info.get('input_source')
 
     RCP_scenario = AFFORESTATION_CONFIG.get('RCP')
-    Year_potential = AFFORESTATION_CONFIG.get('Year_potential')
+    # Year_potential = AFFORESTATION_CONFIG.get('Year_potential')
+    Year_potential = settings["SCENARIO_SPECS"]["Year_potential"]
     df_stats['RCP'] = RCP_scenario
     df_stats['Year_potential'] = Year_potential
 
@@ -914,9 +917,9 @@ def calc_stats_biomass_NUTS(raster_dir: str, spatial_layer: gpd,
     FGS = df_F_info.loc[df_F_info['SPECIES_NAME'] == dict_Tree_species_factors_info.get(
         'Tree_species')]['FGS'].values[0]
     df_stats['FGS'] = FGS
+    # TODO add scenario name column <Intensity_afforestation>_< Tree_species >_< Landuse>
 
-
-    df_stats['geometry'] = [spatial_layer.geometry]
+    # df_stats['geometry'] = [spatial_layer.geometry]
 
     # set nan to 0
     df_stats = df_stats.fillna(0)
