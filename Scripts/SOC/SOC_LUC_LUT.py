@@ -26,12 +26,12 @@ import matplotlib.colors as mcolors
 import sys
 import dask.dataframe as dd
 from dask import compute
-from dask.distributed import Client, LocalCluster
+from dask.distributed import Client, LocalCluster, performance_report
 matplotlib.use('Agg')
 
 # the below line works only if current working directory is ETC-LULUCF
 # adapt it if running the script from another directory
-sys.path.append(Path(os.getcwd()).parent.joinpath('src').as_posix())
+sys.path.append(Path(os.getcwd()).joinpath('src').as_posix())
 
 # from SOC_scenarios.utils.spark import get_spark_sql
 from SOC_scenarios.utils.soc_helper_functions import (
@@ -69,7 +69,28 @@ def create_hist(lst_input: list, dict_printing_stats: dict, outname: str,
     fig.savefig(os.path.join(outfolder, outname))
     plt.close()
 
+def _get_LUT_strata_wrapper(row, settings={}, lst_SOC_data = [], stratification='path'):
+    # for i, row in df_full_stratification.iterrows():
+    strata_id, lst_df_out = _get_LUT_strata(
+        row.STRATA_ID,
+        lst_SOC_data,
+        df_full_stratification,
+        settings)
 
+    df_strata = lst_df_out[0]
+    df_cdf = lst_df_out[1]
+
+    if (df_strata != None):
+        # Get summary stats for LUT
+        df_strata_meta = row
+        df_strata_meta = pd.DataFrame(df_strata_meta.values).T
+        df_strata_meta.columns = row.index
+        for j in df_strata_meta.columns:
+            df_strata[j] = df_strata_meta[j]
+            df_cdf[j] = df_strata_meta[j].values[0]
+
+        lst_df_stats.append(df_strata)
+        lst_df_cdf.append(df_cdf)
 @log.catch()
 def _get_LUT_strata(strata, lst_data,
                     df_strata_info, settings,
@@ -81,8 +102,16 @@ def _get_LUT_strata(strata, lst_data,
     LEVEL_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
 
     log.info(f'SEARCHING STATS FOR STRATA ID: {strata}')
-    files_strata = [item for item in lst_data if f'STRATA_{str(strata)}'
-                    in list(np.load(item, mmap_mode='r').keys())]
+    # files_strata = [item for item in lst_data if f'STRATA_{str(strata)}'
+    #                 in list(np.load(item, mmap_mode='r').keys())]
+    files_strata = []
+    for item in lst_data:
+        # log.info(f"{item}")
+        try:
+            if f'STRATA_{str(strata)}' in list(np.load(item, mmap_mode='r').keys()):
+                files_strata.append(item)
+        except TypeError:
+            log.info(item)
 
     log.info(f'FOUND {str(len(files_strata))} FILES FOR STRATA ID: {strata}')
 
@@ -141,8 +170,8 @@ def _get_LUT_strata(strata, lst_data,
 
     return strata, [(df_strata_stats), (df_cdf)]
 
-# @log.catch()
-def process_row(row, settings={}, stratification='path'):
+@log.catch()
+def _get_stats_window_wrapper(row, settings={}, stratification='path'):
     Level_LUC = f'LEVEL_{str(settings.get("Level_LUC_classes"))}'
 
     outfolder = os.path.join(settings.get("outfolder"),
@@ -164,7 +193,69 @@ def process_row(row, settings={}, stratification='path'):
         return window_id
 
 
-# @log.catch()
+def process_strata(strata, settings={}, window=[]):
+    lst_loc_strata = []
+    for dataset in settings.get('DATASETS'):
+        idx_dataset = list(settings.get('DATASETS')).index(dataset)
+        if dataset == 'SOC':
+            continue
+        nodatavalue = rasterio.open(settings.get(
+            'DATASETS').get(dataset)).profile.get('nodata')
+        if nodatavalue is None:
+            nodatavalue = 0
+        ds = settings.get( 'DATASETS').get(dataset)
+        values_dataset = rasterio.open(ds).read(1, window=window)
+        if np.all([values_dataset == nodatavalue]) and idx_dataset == 0:
+            # log.warning(f'NO STRATIFICATION COULD BE DONE FOR WINDOW {window} DUE TO NO VALID VALUES (nodata values)')
+            continue
+        # Check if the window is not partially located at a border for where no data is available
+        if idx_dataset == 0:
+            loc_invalid = np.where(values_dataset == nodatavalue)
+
+        # Retrieve information on how the specific opened dataset should be stratified
+        if type(strata[f'{dataset}_RANGE']) != int:
+            lst_filtering = literal_eval(strata[f'{dataset}_RANGE'])
+        else:
+            lst_filtering = [strata[f'{dataset}_RANGE']]
+        if dataset == 'SLOPE':
+            loc_strata = np.where(np.logical_and(np.greater_equal(values_dataset, lst_filtering[0]),
+                                                    np.less(values_dataset, lst_filtering[-1])))
+        else:
+            loc_strata = np.where(np.isin(values_dataset, lst_filtering))
+
+        # no match with one of the datasets --> skip to next strata
+        if loc_strata[0].size == 0:
+            lst_loc_strata = []
+            break
+
+        lst_loc_strata.append(loc_strata)
+    if lst_loc_strata:
+        nodata_SOC = rasterio.open(settings.get(
+            'DATASETS').get('SOC')).profile.get('nodata')
+        values_SOC = rasterio.open(settings.get(
+            'DATASETS').get('SOC')).read(1, window=window)
+        if np.all([values_SOC == nodata_SOC]):
+            return None
+
+        # create an empty array to define the locations where
+        # all the conditions match based
+        # on the stratification datasets
+        values_SOC_match = np.zeros(values_SOC.shape)
+        for loc_filtering in lst_loc_strata:
+            values_SOC_match[loc_filtering] += 1
+
+        values_SOC_match[loc_invalid] = 0
+        values_SOC_match[values_SOC == nodatavalue] = 0
+
+        sample_SOC = values_SOC[values_SOC_match == len(lst_loc_strata)]
+        if sample_SOC.size == 0:
+            return None
+        # dict_stats[f'STRATA_{str(strata["STRATA_ID"])}'] = sample_SOC
+        return sample_SOC
+    else:
+        return None
+
+@log.catch()
 def _get_stats_window(window, settings, df_stratification):
     # Iterate through the datasets and store the corresponding stats in a NPZ format
     dict_stats = {}
@@ -178,12 +269,13 @@ def _get_stats_window(window, settings, df_stratification):
                             "stratification", "inputs",
                             Level_LUC)
 
-    # skip window if it was already computed
-    if os.path.exists(os.path.join(outfolder, window_id + '.npz')):
-        # log.info(f'npz file for window {window} already exists')
-        return
+    # # skip window if it was already computed
+    # if os.path.exists(os.path.join(outfolder, window_id + '.npz')):
+    #     # log.info(f'npz file for window {window} already exists')
+    #     return
     
 
+    # stats_strata = df_stratification.apply(process_strata, settings=settings, window=window, axis=1)
     for i, strata in df_stratification.iterrows():
         lst_loc_strata = []
         for dataset in settings.get('DATASETS'):
@@ -601,7 +693,7 @@ def main_SOC_analysis(settings, sql=None):
         # if not locally processed
 
         if sql is None:
-            for i, row in df[72342:].iterrows():
+            for i, row in df.iterrows():
                 log.info(
                     f'Processing window {str(i)} out of {str(df.shape[0])}')
                 # if ((row.x0, row.x1), (row.y0, row.y1)) == ((768, 896), (40448, 40576)):
@@ -625,19 +717,23 @@ def main_SOC_analysis(settings, sql=None):
 
             # df_spark.unpersist()
 
-            cluster = LocalCluster()
-            client=Client(address=cluster)
+            
+            client=Client()
             print(str(client))
-            dask_df = dd.from_pandas(df[62054:], npartitions=8)
+            dask_df = dd.from_pandas(df, npartitions=20)
+            log.info(
+                    f'Processing {str(df.shape[0])} windows')
             # Apply the processing function to each row
-            dask_output = dask_df.apply(process_row, settings=settings, stratification=stratification_path, axis=1, meta=(None, 'string'))
+            with performance_report(filename="SOC_LUC_LUT_4096.html"):
+                dask_output = dask_df.apply(_get_stats_window_wrapper, settings=settings, stratification=stratification_path, axis=1, meta=(None, 'string'))
             # dask_output = dask_df.map_partitions(lambda row: row.apply(process_row, settings=settings, stratification=df_full_stratification), meta=(None, 'string'))
 
             # Compute the result
-            dask_output_result = dask_output.compute()
+                dask_output_result = dask_output.compute()
+                # dask_output.visualize(filename='dask_graph.svg')
 
             # Convert the Dask output to a dictionary
-            dask_output_dict = dict(dask_output_result)
+                # dask_output_dict = dict(dask_output_result)
 
             log.success('All kernel rerieval done!')
 
@@ -748,15 +844,15 @@ def main_SOC_analysis(settings, sql=None):
                         lst_df_stats.append(df_strata)
                         lst_df_cdf.append(df_cdf)
 
-                df_all_stats = pd.concat(lst_df_stats)
-                df_all_stats = df_all_stats.reset_index(drop=True)
-                df_all_stats.to_csv(os.path.join(
-                    outfolder_LUT, outname_LUT), index=False)
+            df_all_stats = pd.concat(lst_df_stats)
+            df_all_stats = df_all_stats.reset_index(drop=True)
+            df_all_stats.to_csv(os.path.join(
+                outfolder_LUT, outname_LUT), index=False)
 
-                df_all_cdf = pd.concat(lst_df_cdf)
-                df_all_cdf = df_all_cdf.reset_index(drop=True)
-                df_all_cdf.to_csv(os.path.join(
-                    outfolder_LUT, outname_CDF), index=False)
+            df_all_cdf = pd.concat(lst_df_cdf)
+            df_all_cdf = df_all_cdf.reset_index(drop=True)
+            df_all_cdf.to_csv(os.path.join(
+                outfolder_LUT, outname_CDF), index=False)
 
     if settings.get('Assessment_SOC'):
 
@@ -874,7 +970,7 @@ if __name__ == '__main__':
     # for setting permission correctly
     oldmask = os.umask(0o002)
 
-    log.add('SOC_LUC_LUT_test.log')
+    # log.add('SOC_LUC_LUT_test.log')
     log.info('*' * 50)
 
     from constants import (
@@ -886,13 +982,13 @@ if __name__ == '__main__':
     # dir_signature = WindowsPath('//cwsfileserver/projects/lulucf/f02_data/carbon_model_data')
 
     # The DEM may not be set as the first dataset!!!!!
-    # TODO check data
+
     DATASETS = {
         'ENV': os.path.join(dir_signature, 'input',
                             'EnvZones', 'eea_r_3035_100_m_EnvZ-Metzger_2020_v1_r00.tif'),
         'SLOPE':  os.path.join(dir_signature, 'input', 'DEM', 'DEM_slope_3035_100m_warped.tif'),
         'LU': os.path.join(dir_signature, 'input', 'CLC_ACC', 'CLC2018ACC_V2018_20.tif'),
-        'SOC': os.path.join(dir_signature, 'input', 'IPCC_layers', 'soil', 'ipcc_soil_type_100m_EPSG3035_EEA39.tif')
+        'SOC': os.path.join(dir_signature, 'input', 'ISRIC', 'ocs030cm100m.tif')
     }
 
     # Below add some ancillary information 
@@ -925,13 +1021,13 @@ if __name__ == '__main__':
     outfolder_SOC_LUC = os.path.join(dir_signature, 'output',
                                      'strata', 'SOC_LUC')
 
-    overwrite = False
+    overwrite = True
     # If set to False, will run on the cluster
     run_local = True
 
     # If the  SOC sample data should not be retrieved
     #  anymore set this to false
-    retrieve_SOC_strata_kernel = True
+    retrieve_SOC_strata_kernel = False
 
     # Set to True if want to compile all the
     # SOC per strate to create a LUT
@@ -964,7 +1060,7 @@ if __name__ == '__main__':
     settings = {'DATASETS': DATASETS,
                 'ANCILLARY': ANCILLARY,
                 'CLC_cross_walk': CLC_IPCC_mapping_refinement,
-                'Kernel': 128,
+                'Kernel': 128*16*2,
                 'Level_LUC_classes': Level_crosswalk,
                 'Env_zones_mapping': Env_zones_mapping,
                 'Slope_classes': SLOPE_CAT,
@@ -980,7 +1076,7 @@ if __name__ == '__main__':
     # First deal with the spark stuff
     if not run_local:
         # sql = get_spark_sql(local=run_local)
-        print("error")
+        log.info("running parallel")
         # Start a local Dask cluster with 4 workers and 1 thread per worker
         # Connect a Dask client to the cluster
         sql='dask'
