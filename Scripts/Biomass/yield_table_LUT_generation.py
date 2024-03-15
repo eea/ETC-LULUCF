@@ -20,11 +20,12 @@ def get_sheet(dir_excel, sheet_name,
                              skiprows=skiprows)
     return df_sheet
 
+
 def Iv_aggregate(df,  
-                 mgmt_strategy=['E', 'S'], 
-                 agg_columns = ['EEA Forest code', 
-                                'FOREST_ZONE',
-                                'Forest type (IPCC)']):
+                 mgmt_strategy=['E', 'S'],
+                 agg_columns =['EEA Forest code',
+                               'FOREST_ZONE',
+                               'Forest type (IPCC)']):
     """
     Function that will calculate an aggregated value
     of the increment per forest zone and forest type
@@ -34,11 +35,9 @@ def Iv_aggregate(df,
     df_filter = df.loc[df['mgmt_strategy'].isin(mgmt_strategy)]
     df_agg_avg = df_filter.groupby(by=agg_columns).mean(numeric_only=True)
     df_agg_avg = df_agg_avg.reset_index()
-    df_agg_min = df_filter.groupby(by=agg_columns).quantile(q=0.1, 
-                                                            numeric_only=True)
+    df_agg_min = df_filter.groupby(by=agg_columns).quantile(q=0.1)
     df_agg_min = df_agg_min.reset_index()
-    df_agg_max = df_filter.groupby(by=agg_columns).quantile(q=0.9, 
-                                                            numeric_only=True)
+    df_agg_max = df_filter.groupby(by=agg_columns).quantile(q=0.9)
     df_agg_max = df_agg_max.reset_index()
     df_agg_avg['AgeCL_2_min'] = df_agg_min['AgeCL_2']
     df_agg_avg['AgeCL_3_min'] = df_agg_min['AgeCL_3']
@@ -103,7 +102,7 @@ def get_coefficient(species_code, forest_zone, df_coeff, coeff_name,
     Based on the species code and forest zone 
     find the corresponding coefficient
     """
-    if not ZONE_DEP:
+    if not ZONE_DEP and not SPECIES_DEP:
         coeff_row = df_coeff.loc[df_coeff['Code'].isin([item for item in df_coeff['Code'] if species_code in item])]
     elif SPECIES_DEP:
          coeff_row = df_coeff.loc[df_coeff['EEA Forest code'] == species_code]
@@ -192,7 +191,7 @@ def create_unique_comb_df(DATAFRAMES):
             FT_coeff = get_coefficient(species_code, forest_zone,
                                        df_FG, 'FT', SPECIES_DEP=True)
             
-             # FGS
+            # FGS
             df_FGS = DATAFRAMES_LINKED.get('FGS')
             FGS_coeff = get_coefficient(species_code, forest_zone,
                                        df_FGS, 'FGS', SPECIES_DEP=True)
@@ -274,7 +273,6 @@ def compile_species(df, idx_valid=6):
     return df_filter_av
 
 
-    
 def get_annual_C_species(settings):
     dir_excel = settings.get('CONFIG_SPECS').get('yield_table_dir')
 
@@ -290,18 +288,19 @@ def get_annual_C_species(settings):
     df_RTS = get_df_coefficient(df_RTS, '<=75', 'RTS')
 
     # Net annual increment (I) based on JRC
-    df_I_JRC = get_sheet(dir_excel, 'NAI_even_EEA')
+    df_I_JRC = get_sheet(dir_excel, 'EEA NAI_Ev clean')
     df_I_JRC = get_df_coefficient(df_I_JRC, ['AgeCL_2', 'AgeCL_3'], 'Iv')
     df_I_JRC = df_I_JRC.reset_index(drop=True)
+    df_I = df_I_JRC
 
-    # Net annual increment (I) based on growth curve calculation
-    df_I_added = get_sheet(dir_excel, 'NAI_even_EEA_add_species')
-    df_I_added = get_df_coefficient(df_I_added, ['Min', 'Max', 'Avg'], 'Iv_add')
-    df_I_added = df_I_added.reset_index(drop=True)
+    # # Net annual increment (I) based on growth curve calculation
+    # df_I_added = get_sheet(dir_excel, 'NAI_even_EEA_add_species')
+    # df_I_added = get_df_coefficient(df_I_added, ['Min', 'Max', 'Avg'], 'Iv_add')
+    # df_I_added = df_I_added.reset_index(drop=True)
 
-    # merge the two increment dataframes
-    df_I = pd.concat([df_I_JRC, df_I_added], axis=0)
-    df_I = df_I.reset_index(drop=True)
+    # # merge the two increment dataframes
+    # df_I = pd.concat([df_I_JRC, df_I_added], axis=0)
+    # df_I = df_I.reset_index(drop=True)
 
     # Get forest group info (FT)
     df_FG = get_sheet(dir_excel, 'Species_EEA_type')
@@ -317,10 +316,11 @@ def get_annual_C_species(settings):
     df_F_code_JRC = get_sheet(dir_excel, 'Species_EEA', skiprows=1)
     df_F_code_JRC = compile_species(df_F_code_JRC)
     df_F_code_JRC = df_F_code_JRC.reset_index(drop=True)
-    df_F_code_added = get_sheet(dir_excel, 'Species_EEA_added')
-    df_F_code_added = df_F_code_added.reset_index(drop=True)
-    df_F_code = pd.concat([df_F_code_JRC, df_F_code_added], axis=0)
-    df_F_code = df_F_code.reset_index(drop=True)
+    # df_F_code_added = get_sheet(dir_excel, 'Species_EEA_added')
+    # df_F_code_added = df_F_code_added.reset_index(drop=True)
+    # df_F_code = pd.concat([df_F_code_JRC, df_F_code_added], axis=0)
+    df_F_code = df_F_code_JRC
+    # df_F_code = df_F_code.reset_index(drop=True)
     df_F_code = df_F_code.sort_values(by=['Code'])
 
     # combine all the dataframes to get 
@@ -338,6 +338,7 @@ def get_annual_C_species(settings):
     df_C_seq_LUT = create_unique_comb_df(DATAFRAMES)
 
     return df_C_seq_LUT
+
 
 def add_ms_species(settings):
     """
@@ -365,9 +366,6 @@ def add_ms_species(settings):
     # Get per species and forest zone the yearly increment
     
 
-    
-
-
 def get_LUT_forest_zone(settings):
     # open first the shapefile of NUTS regions
     shp_NUTS = gpd.read_file(settings.get('VECTORS').get('NUTS'))
@@ -390,13 +388,28 @@ def get_LUT_forest_zone(settings):
     return df_NUTS_LUT_final
 
 
+def group_LUT_species(settings, dir_LUT_species,
+                      grouplevel=['FGS', 'FOREST_ZONE']):
+    # need to groupby forest zone and species type
+    df_species_LUT = pd.read_csv(dir_LUT_species)
+    # take the average per grouylevel
+    df_avg_LUT_group = df_species_LUT.groupby(by=grouplevel).mean(numeric_only=True)
+    df_avg_LUT_group = df_avg_LUT_group.reset_index()
+    # keep only relevant columns
+    cols_keep = [item for item in df_avg_LUT_group.columns.values
+                 if 'yrl_C_seq' in item]
+    df_avg_LUT_group = df_avg_LUT_group[grouplevel + cols_keep]
+    return df_avg_LUT_group
+    
+
 def _main_(settings):
 
     # first define outfolder and outname 
     # and check if file not yet exists
 
     outfolder = settings.get('CONFIG_SPECS').get('outfolder')
-    outname_C_seq_LUT = 'LUT_C_SEQ_AFFOR_JRC_V3.csv'
+    outname_C_seq_LUT = 'LUT_C_SEQ_AFFOR_JRC_V4.csv'
+    outname_C_seq_LUT_FGS = 'LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS.csv'
     outname_forest_zone_LUT = 'LUT_FOREST_ZONE.csv'
     overwrite = settings.get('CONFIG_SPECS').get('overwrite')
     
@@ -409,6 +422,18 @@ def _main_(settings):
         # write the corresponding dataframe 
         # to the output folder
         df_C_seq.to_csv(os.path.join(outfolder, outname_C_seq_LUT), index=False)
+    
+    # C seq LUT for grouped species (F/S)
+    if not os.path.exists(os.path.join(outfolder, outname_C_seq_LUT_FGS)) or overwrite:
+        # function that will generate 
+        # the annual C increase for the grouped species
+        df_C_seq = group_LUT_species(settings,
+                                     os.path.join(outfolder,
+                                                  outname_C_seq_LUT))
+        # write the corresponding dataframe 
+        # to the output folder
+        df_C_seq.to_csv(os.path.join(outfolder, outname_C_seq_LUT_FGS),
+                        index=False)
 
     # Forest zone LUT
     if not os.path.exists(os.path.join(outfolder, outname_forest_zone_LUT)) or overwrite:
@@ -417,9 +442,8 @@ def _main_(settings):
         df_NUTS_LUT_final = get_LUT_forest_zone(settings)
 
         df_NUTS_LUT_final.to_csv(os.path.join(outfolder, 
-                                              outname_forest_zone_LUT), 
-                                              index=False)
-
+                                              outname_forest_zone_LUT),
+                                 index=False)
 
 
 if __name__ == '__main__':
@@ -431,7 +455,7 @@ if __name__ == '__main__':
         dir_signature)
 
     # define the directory of the yield table:
-    name_file = 'Growth_curves_JRC_Data_Collection_140923_EEA_V2.xlsx'
+    name_file = 'Growth_curves_JRC_Data_Collection_140324_EEA_V3.xlsx'
     folder_table = os.path.join(Basefolder_strata, 
                                 'NUTS_LUT_afforestation_scenario',
                                 'JRC_yield_table')
