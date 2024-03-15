@@ -57,6 +57,32 @@ def define_affor_areas(settings, slope_max=87.5):
     # CLC_ACC raster
     CLC_dir = AFFORESTATION_MASK_DATASETS.get('CLC')
 
+    
+    ################### NEW: 2024 by ETC-DI: START
+    #'hnvf': 
+    hnvf_dir = AFFORESTATION_MASK_DATASETS.get('hnvf')
+    if not os.path.exists(hnvf_dir):
+        print(hnvf_dir)
+        raise Exception
+    print(hnvf_dir)
+
+
+    #'peatland': 
+    peatland_dir = AFFORESTATION_MASK_DATASETS.get('peatland')
+    if not os.path.exists(peatland_dir):
+        print(peatland_dir)
+        raise Exception
+    print(peatland_dir)
+
+    #'ex_wetland': 
+    ex_wetland_dir = AFFORESTATION_MASK_DATASETS.get('ex_wetland')
+    if not os.path.exists(ex_wetland_dir):
+        print(ex_wetland_dir)
+        raise Exception
+    print(ex_wetland_dir)
+    ################### NEW: 2024 by ETC-DI: END
+    
+    
     # DEM
     DEM_dir = AFFORESTATION_MASK_DATASETS.get('DEM')
     if not os.path.exists(DEM_dir):
@@ -119,6 +145,7 @@ def define_affor_areas(settings, slope_max=87.5):
     # Define the output folder in which the afforesation mask should be written
     Basefolder_mask = Path(settings.get('CONFIG_SPECS').get('Basefolder_output')
                            ).joinpath('Afforestation_mask')
+    print ("Afforestation_mask output:")
     if settings.get('CONFIG_SPECS').get('Country') is None and not settings.get('CONFIG_SPECS').get('block_based_processing'):
         outdir_mask = Basefolder_mask
         outname_mask = f'Afforestation_mask_{str(settings.get("SCENARIO_SPECS").get("Year_baseline"))}_EEA39.tif'
@@ -134,6 +161,7 @@ def define_affor_areas(settings, slope_max=87.5):
                            f'{settings.get("NUTS3_info")["NUTS_ID"]}_{land_use_selection}.tif'
 
     outdir_mask.mkdir(parents=True, exist_ok=True)
+    print (outdir_mask)
 
     if not os.path.exists(outdir_mask.joinpath(outname_mask)) or overwrite:
         # TODO need to add the option if not block-based processing
@@ -179,6 +207,37 @@ def define_affor_areas(settings, slope_max=87.5):
                 logger.warning(
                     f'N2K RASTER IS NOT FULLY AVALABLE AT NUTS REGION: {settings.get("NUTS3_info").NUTS_ID}')
                 return None
+            
+            ############################### NEW ETC-DI:
+
+            # hnvf
+            hnvf_raster, src_hnvf_raster = open_raster_from_window(
+                hnvf_dir, bounds)
+            if hnvf_raster.size == 0:
+                logger.info(
+                    f'NO PIXEL DATA AVAILABLE FOR NUTS REGION: {settings.get("NUTS3_info").NUTS_ID}')
+                return None
+            no_data_hnvf_raster = src_hnvf_raster.get('nodata')
+                       
+            #peatland
+            peatland_raster, src_peatland_raster = open_raster_from_window(
+                peatland_dir, bounds)
+            if peatland_raster.size == 0:
+                logger.info(
+                    f'NO PIXEL DATA AVAILABLE FOR NUTS REGION: {settings.get("NUTS3_info").NUTS_ID}')
+                return None
+            no_data_peatland_raster = src_peatland_raster.get('nodata')
+                       
+            #ex_wetland
+            ex_wetland_raster, src_ex_wetland_raster = open_raster_from_window(
+                ex_wetland_dir, bounds)
+            if ex_wetland_raster.size == 0:
+                logger.info(
+                    f'NO PIXEL DATA AVAILABLE FOR NUTS REGION: {settings.get("NUTS3_info").NUTS_ID}')
+                return None
+            no_data_ex_wetland_raster = src_ex_wetland_raster.get('nodata')
+
+
 
             if External_mask_dir is not None:
                 # open the external mask raster only for the window that covers the NUTS region
@@ -264,8 +323,24 @@ def define_affor_areas(settings, slope_max=87.5):
         """
         # if N2K set back to zero (PRIORITY!!!!):
         # Only for those where the CLC class is valid
+        ## 
         loc_mask_N2K = np.where((N2K_raster == 1) & (CLC_LUCAT_raster == 1))
-        mask_raster[loc_mask_N2K] = 0 ### OK unti here..66  # original: 0
+        mask_raster[loc_mask_N2K] = 0 
+
+        loc_mask_hnvf = np.where((hnvf_raster ==1))   ## pixel values which  are 1 should not be part of the afforestation area
+        mask_raster[loc_mask_hnvf] = 0 
+        # peatland 1 & 2 =
+        loc_mask_peatland = np.where((peatland_raster >0 )    )   ## 1 and 2 pixel values should be removed from the afforestation area
+        #loc_mask_peatland = np.where((peatland_raster ==1) | np.where(peatland_raster == 2)) 
+
+
+        mask_raster[loc_mask_peatland] = 0 
+
+        loc_mask_ex_wetland= np.where((ex_wetland_raster > 0))   ## pixel values > 0 = wetlands and should not be part of the afforestation area
+        mask_raster[loc_mask_ex_wetland] = 0 
+
+
+
 
         ########## TODO: ETC/DI #############
 

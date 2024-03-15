@@ -30,6 +30,8 @@ import json
 import dask_geopandas
 from dask.distributed import LocalCluster, Client, performance_report
 
+
+print ("START..............................................")
 ### location of the code to run the scenarios
 sys.path.append(Path(os.getcwd()).joinpath('src').as_posix())
 from SOC_scenarios.utils.soc_helper_functions import *
@@ -116,22 +118,36 @@ def get_settings():
     Basefolder_input_data = os.path.join(dir_signature, 'input')
 
     ### the basefolder in which all the output results will be stored
-    Basefolder_output =  os.path.join(dir_signature, 'output')
+    Basefolder_output =  os.path.join(dir_signature, 'output_aff_LB')
 
     # the name of the drive on which all the data can be accessed:
     # dir_signature = os.getcwd()
 
     # location where the NUTS specific configuration for afforesation is stored
-    NUTS_LUT_factors_folder = os.path.join(Basefolder_output,'NUTS_LUT_afforestation_scenario')
+    #NUTS_LUT_factors_folder = os.path.join(Basefolder_output,'NUTS_LUT_afforestation_scenario')
+    NUTS_LUT_factors_folder = os.path.join(Basefolder_input_data,'LookUpTables')
+
 
     # define the yield table LUT and forest zone LUT
     # location that should be used for processing
-    name_yield_table_LUT = 'LUT_C_SEQ_AFFOR_JRC_V3.csv'
+    #name_yield_table_LUT = 'LUT_C_SEQ_AFFOR_JRC_V3.csv'
+    #name_LUT_forest_zones = 'LUT_FOREST_ZONE.csv'
+    #folder_JRC_table = os.path.join(Basefolder_output, 'NUTS_LUT_afforestation_scenario',
+    #                                'JRC_yield_table')
+    #yield_table_LUT_dir = os.path.join(folder_JRC_table, name_yield_table_LUT)
+    #forest_zone_dir = os.path.join(folder_JRC_table, name_LUT_forest_zones)
+
+
+
+    name_yield_table_LUT = 'LUT_C_SEQ_AFFOR_JRC_V4.csv'
     name_LUT_forest_zones = 'LUT_FOREST_ZONE.csv'
-    folder_JRC_table = os.path.join(Basefolder_output, 'NUTS_LUT_afforestation_scenario',
-                                    'JRC_yield_table')
+    folder_JRC_table = os.path.join(Basefolder_input_data, 'LookUpTables','JRC_yield_table')
     yield_table_LUT_dir = os.path.join(folder_JRC_table, name_yield_table_LUT)
     forest_zone_dir = os.path.join(folder_JRC_table, name_LUT_forest_zones)
+
+
+
+
 
 
     CONFIGURATION_SPECS = {
@@ -210,7 +226,7 @@ def get_settings():
 
                                 'hnvf': hnvf_location,
                                 'peatland': peatland_location,
-                                'Nex_wetlandK': ex_wetland_location,
+                                'ex_wetland': ex_wetland_location,
 
 
 
@@ -218,6 +234,7 @@ def get_settings():
                             'CLC': CLC_dir}
 
     """Load the datasets needed for defining afforestation suitability of tree species"""
+    
 
     # Below define the raster(s) for defining the suitability
     #  of planting a certain tree species
