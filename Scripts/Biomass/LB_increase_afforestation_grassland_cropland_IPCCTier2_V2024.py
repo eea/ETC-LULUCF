@@ -118,14 +118,16 @@ def get_settings():
     Basefolder_input_data = os.path.join(dir_signature, 'input')
 
     ### the basefolder in which all the output results will be stored
-    Basefolder_output =  os.path.join(dir_signature, 'output_aff_LB')
+    Basefolder_output =  os.path.join(dir_signature, 'output')
 
     # the name of the drive on which all the data can be accessed:
     # dir_signature = os.getcwd()
 
+
     # location where the NUTS specific configuration for afforesation is stored
-    #NUTS_LUT_factors_folder = os.path.join(Basefolder_output,'NUTS_LUT_afforestation_scenario')
-    NUTS_LUT_factors_folder = os.path.join(Basefolder_input_data,'LookUpTables')
+    NUTS_LUT_factors_folder = os.path.join(Basefolder_output,'NUTS_LUT_afforestation_scenario')
+    
+    #NUTS_LUT_factors_folder = os.path.join(Basefolder_input_data,'LookUpTables')
 
 
     # define the yield table LUT and forest zone LUT
@@ -141,7 +143,10 @@ def get_settings():
 
     name_yield_table_LUT =  'LUT_C_SEQ_AFFOR_JRC_V4.csv'
     name_LUT_forest_zones = 'LUT_FOREST_ZONE.csv'
-    folder_JRC_table =    os.path.join(Basefolder_input_data, 'LookUpTables','JRC_yield_table')
+    #folder_JRC_table =    os.path.join(Basefolder_input_data, 'LookUpTables','JRC_yield_table')
+
+    folder_JRC_table = os.path.join(Basefolder_output, 'NUTS_LUT_afforestation_scenario', 'JRC_yield_table')
+
     yield_table_LUT_dir = os.path.join(folder_JRC_table, name_yield_table_LUT)
     forest_zone_dir =     os.path.join(folder_JRC_table, name_LUT_forest_zones)
 
@@ -301,19 +306,49 @@ def nuts_wrapper(row, settings):
         logger.info(f'{row.NUTS_ID} Statistics already exist')
         return pd.DataFrame(data=[])
 
-    # from https://github.com/VITObelgium/ETC-CCA-LULUCF/blob/master/notebooks/output/NUTS_LUT_afforestation_scenario/JRC_yield_table/LUT_C_SEQ_AFFOR_JRC_V3.csv
-    tree_species = ['Abies_alba', 'Acer_campestre',
-    'Alnus_glutinosa', 'Alnus_incana',
-       'Acer_opalus', 'Acer_platanoides', 'Acer_pseudoplatanus',
-       'Betula_pendula', 'Carpinus_betulus', 'Carpinus_orientalis',
-       'Castanea_sativa', 'Fraxinus_angustifolia', 'Fraxinus_excelsior',
-       'Fraxinus_ornus', 'Fagus_sylvatica', 'Juglans_regia',
-       'Larix_decidua', 'Picea_abies', 'Pinus_cembra', 'Pinus_pinaster',
-       'Pinus_nigra', 'Populus_nigra', 'Pinus_sylvestris', 'Pinus_pinea',
-       'Prunus_avium', 'Quercus_cerris', 'Quercus_faginea',
-       'Quercus_frainetto', 'Quercus_ilex', 'Quercus_robur',
-       'Quercus_suber', 'Quercus_petraea', 'Quercus_pubescens',
-       'Quercus_coccifera', 'Salix_alba', 'Ulmus_minor'] 
+   ## from https://github.com/VITObelgium/ETC-CCA-LULUCF/blob/master/notebooks/output/NUTS_LUT_afforestation_scenario/JRC_yield_table/LUT_C_SEQ_AFFOR_JRC_V3.csv
+   #tree_species = ['Abies_alba', 'Acer_campestre',
+   #'Alnus_glutinosa', 'Alnus_incana',
+   #   'Acer_opalus', 'Acer_platanoides', 'Acer_pseudoplatanus',
+   #   'Betula_pendula', 'Carpinus_betulus', 'Carpinus_orientalis',
+   #   'Castanea_sativa', 'Fraxinus_angustifolia', 'Fraxinus_excelsior',
+   #   'Fraxinus_ornus', 'Fagus_sylvatica', 'Juglans_regia',
+   #   'Larix_decidua', 'Picea_abies', 'Pinus_cembra', 'Pinus_pinaster',
+   #   'Pinus_nigra', 'Populus_nigra', 'Pinus_sylvestris', 'Pinus_pinea',
+   #   'Prunus_avium', 'Quercus_cerris', 'Quercus_faginea',
+   #   'Quercus_frainetto', 'Quercus_ilex', 'Quercus_robur',
+   #   'Quercus_suber', 'Quercus_petraea', 'Quercus_pubescens',
+   #   'Quercus_coccifera', 'Salix_alba', 'Ulmus_minor'] 
+    
+
+    # update of LUT species
+    #https://github.com/VITObelgium/ETC-CCA-LULUCF/blob/master/notebooks/output/NUTS_LUT_afforestation_scenario/JRC_yield_table/LUT_C_SEQ_AFFOR_JRC_V4.csv
+    tree_species =[
+                    'Abies_alba'
+                    ,'Alnus_glutinosa'
+                    ,'Alnus_incana'
+                    ,'Betula_pendula'
+                    ,'Carpinus_betulus'
+                    ,'Castanea_sativa'
+                    ,'Fagus_sylvatica'
+                    ,'Fraxinus_excelsior'
+                    ,'Larix_decidua'
+                    ,'Picea_abies'
+                    ,'Pinus_cembra'
+                    ,'Pinus_nigra'
+                    ,'Pinus_pinaster'
+                    ,'Pinus_pinea'
+                    ,'Pinus_sylvestris'
+                    ,'Populus_nigra'
+                    ,'Quercus_cerris'
+                    ,'Quercus_ilex'
+                    ,'Quercus_petraea'
+                    ,'Quercus_pubescens'
+                    ,'Quercus_suber'
+                    ,'Robinia_pseudoacacia']
+
+
+
     # # TODO define settings variants
     lst_NUTS_stats = []
     for classes, land_use_selection in [[[211, 212, 213],'cropland'], [[231], 'grassland']]:  # cropland or grassland
