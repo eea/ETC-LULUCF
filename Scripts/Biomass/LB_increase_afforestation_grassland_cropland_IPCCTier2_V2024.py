@@ -139,11 +139,11 @@ def get_settings():
 
 
 
-    name_yield_table_LUT = 'LUT_C_SEQ_AFFOR_JRC_V4.csv'
+    name_yield_table_LUT =  'LUT_C_SEQ_AFFOR_JRC_V4.csv'
     name_LUT_forest_zones = 'LUT_FOREST_ZONE.csv'
-    folder_JRC_table = os.path.join(Basefolder_input_data, 'LookUpTables','JRC_yield_table')
+    folder_JRC_table =    os.path.join(Basefolder_input_data, 'LookUpTables','JRC_yield_table')
     yield_table_LUT_dir = os.path.join(folder_JRC_table, name_yield_table_LUT)
-    forest_zone_dir = os.path.join(folder_JRC_table, name_LUT_forest_zones)
+    forest_zone_dir =     os.path.join(folder_JRC_table, name_LUT_forest_zones)
 
 
 

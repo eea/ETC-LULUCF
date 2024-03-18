@@ -71,9 +71,16 @@ def afforestation_LUT_block_proc(settings: dict):
     Prob_files = glob.glob(os.path.join(Folder_EUtrees4F_prob, '*.tif'))
 
     # filter only on the tree species for which we have an IPCC LUT
-    LUT_tree_species = list(set(list(pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('Basefolder_output'),
-                                                     'NUTS_LUT_afforestation_scenario', 'JRC_yield_table',
-                                                     f'LUT_C_SEQ_AFFOR_JRC_V2.csv')).SPECIES_NAME)))
+    #LUT_tree_species = list(set(list(pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('Basefolder_output'),
+    #                                                 'NUTS_LUT_afforestation_scenario', 'JRC_yield_table',
+    #                                                f'LUT_C_SEQ_AFFOR_JRC_V2.csv')).SPECIES_NAME)))
+    
+    LUT_tree_species = list(set(list(pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('Basefolder_input'),
+                                                     'LookUpTables', 'JRC_yield_table',
+                                                     f'LUT_C_SEQ_AFFOR_JRC_V4.csv')).SPECIES_NAME)))
+
+
+
     Prob_files_filtered = [item for item in Prob_files if Path(
         item).stem.split('_ens')[0] in LUT_tree_species]
 
