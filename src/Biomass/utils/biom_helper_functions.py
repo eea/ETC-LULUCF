@@ -410,7 +410,7 @@ def create_affor_potential(settings, affor_mask_array):
         'Basefolder_output')).joinpath(f'{carbon_pool}_scenario')
     Basefolder_affor_potential.mkdir(exist_ok=True)
     Files_EUtrees4F_prob = glob.glob(os.path.join(
-        settings.get('DATASETS').get('AFFORESTATION_SUITABILITY').get('EU4Trees'), '*tif'))
+        settings.get('DATASETS').get('AFFORESTATION_SUITABILITY').get('EU4Trees'),'**\*.tif'))
     # CLC_ACC raster
     CLC_dir = settings.get('DATASETS').get('AFFORESTATION_MASK').get('CLC')
 

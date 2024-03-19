@@ -95,7 +95,7 @@ def get_settings():
     # suffix of the output raster and ID that is
     # used to distinguish different scenario runs
     # TODO fix
-    scenario_name = f'Scenario_JRCV3_{str(2035)}_fix'
+    scenario_name = f'Scenario_JRCV4_{str(2035)}_fix'
 
     # if want to run with some NUTS specific factors
     # set the below parameter to true
@@ -125,7 +125,7 @@ def get_settings():
 
     # define the yield table LUT and forest zone LUT
     # location that should be used for processing
-    name_yield_table_LUT = 'LUT_C_SEQ_AFFOR_JRC_V3.csv'
+    name_yield_table_LUT = 'LUT_C_SEQ_AFFOR_JRC_V4.csv'
     name_LUT_forest_zones = 'LUT_FOREST_ZONE.csv'
     folder_JRC_table = os.path.join(Basefolder_output, 'NUTS_LUT_afforestation_scenario',
                                     'JRC_yield_table')
@@ -177,17 +177,34 @@ def get_settings():
     * Nationally designated areas (CDDA): Protected areas should be EXCLUDED for afforestation
     * High nature value farmland 2012: High nature value farmland should be EXCLUDED for afforestation
     * Extended wetland layer (2018): Any wetland should be EXCLUDED for afforestation
-    * Peatland map (2017): Tanneberger peatland map --> peatland should be EXCLUDED for afforestation
+    * Updated Peatland map  Tanneberger peatland map --> peatland should be EXCLUDED for afforestation
 
 
     The abandoned cropland locations should be PRIORITIZED for afforestation if is has been found suitable
     for afforestation based on the afforestation mask
     """
 
+    # High nature value farmland:  "L:\f02_data\carbon_model_data\input\HighNatureValueFarmland\eea_r_3035_100_m_hnv-farm-2012-acc_p_2012_v01_r00\eea_r_3035_100_m_hnv-farmland-ac_2012_v1_r00.tif"
+    # EXCLUDED for afforestation:
+    hnvf_location =  os.path.join(Basefolder_input_data, 'HighNatureValueFarmland', 'eea_r_3035_100_m_hnv-farmland-ac_2012_v1_r00.tif') 
+    
+    #  Tanneberger 2.0  peatland map ----values: 1= peat dominated, 2= peat in soil mosaic
+    #"L:\f02_data\carbon_model_data\input\PEATLAND\peatGPA22WGS_2cl_eea39_3035_100m.tif"
+    # EXCLUDED for afforestation:
+    peatland_location = os.path.join(Basefolder_input_data, 'PEATLAND', 'peatGPA22WGS_2cl_eea39_3035_100m.tif')
+    
+    #Extended wetland layer (2018)
+    # EXCLUDED for afforestation:
+    ex_wetland_location = os.path.join(Basefolder_input_data, 'WETLAND', 'ext_wetland_2018_v2021_nw.tif') 
+    
+    # Corine land cover 2018:
     CLC_dir = os.path.join(Basefolder_input_data, 'CLC_ACC', 'CLC2018ACC_V2018_20.tif')
 
     DATASETS_afforestation = {'DEM': DEM_location,
                             'N2K': N2K_location,
+                            'hnvf': hnvf_location,
+                            'peatland': peatland_location,
+                            'ex_wetland': ex_wetland_location,
                             'external_mask': external_mask,
                             'CLC': CLC_dir}
 
@@ -197,7 +214,7 @@ def get_settings():
     #  of planting a certain tree species
 
     ## Load the basefolder of the EU4Trees dataset
-    EU4Trees_base = os.path.join(Basefolder_input_data, 'EU-Trees4F', 'ens_sdms','prob','resampled')
+    EU4Trees_base = os.path.join(Basefolder_input_data, 'EU-Trees4F', 'ens_sdms','prob','resampled', 'rcp45') # folder structure has changed
 
     DATASETS_AFFORESTATION_SUITABILTY = {
         'EU4Trees': EU4Trees_base
@@ -256,21 +273,36 @@ def nuts_wrapper(row, settings):
     outname = f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_stats_NUTS_EEA39_{settings.get("CONFIG_SPECS").get("scenario_name")}_{row.NUTS_ID}.csv'
     if(os.path.exists(Path(outfolder).joinpath(outname))):
         logger.info(f'{row.NUTS_ID} Statistics already exist')
-        return pd.DataFrame(data=[])
+        return pd.DataFrame(data=[])    
 
-    # from https://github.com/VITObelgium/ETC-CCA-LULUCF/blob/master/notebooks/output/NUTS_LUT_afforestation_scenario/JRC_yield_table/LUT_C_SEQ_AFFOR_JRC_V3.csv
-    tree_species = ['Abies_alba', 'Acer_campestre',
-    'Alnus_glutinosa', 'Alnus_incana',
-       'Acer_opalus', 'Acer_platanoides', 'Acer_pseudoplatanus',
-       'Betula_pendula', 'Carpinus_betulus', 'Carpinus_orientalis',
-       'Castanea_sativa', 'Fraxinus_angustifolia', 'Fraxinus_excelsior',
-       'Fraxinus_ornus', 'Fagus_sylvatica', 'Juglans_regia',
-       'Larix_decidua', 'Picea_abies', 'Pinus_cembra', 'Pinus_pinaster',
-       'Pinus_nigra', 'Populus_nigra', 'Pinus_sylvestris', 'Pinus_pinea',
-       'Prunus_avium', 'Quercus_cerris', 'Quercus_faginea',
-       'Quercus_frainetto', 'Quercus_ilex', 'Quercus_robur',
-       'Quercus_suber', 'Quercus_petraea', 'Quercus_pubescens',
-       'Quercus_coccifera', 'Salix_alba', 'Ulmus_minor'] 
+    # update of LUT species
+    #https://github.com/VITObelgium/ETC-CCA-LULUCF/blob/master/notebooks/output/NUTS_LUT_afforestation_scenario/JRC_yield_table/LUT_C_SEQ_AFFOR_JRC_V4.csv
+    tree_species =[
+                    'Abies_alba'
+                    ,'Alnus_glutinosa'
+                    ,'Alnus_incana'
+                    ,'Betula_pendula'
+                    ,'Carpinus_betulus'
+                    ,'Castanea_sativa'
+                    ,'Fagus_sylvatica'
+                    ,'Fraxinus_excelsior'
+                    ,'Larix_decidua'
+                    ,'Picea_abies'
+                    ,'Pinus_cembra'
+                    ,'Pinus_nigra'
+                    ,'Pinus_pinaster'
+                    ,'Pinus_pinea'
+                    ,'Pinus_sylvestris'
+                    ,'Populus_nigra'
+                    ,'Quercus_cerris'
+                    ,'Quercus_ilex'
+                    ,'Quercus_petraea'
+                    ,'Quercus_pubescens'
+                    ,'Quercus_suber'
+                    ,'Robinia_pseudoacacia']
+
+
+
     # # TODO define settings variants
     lst_NUTS_stats = []
     for classes, land_use_selection in [[[211, 212, 213],'cropland'], [[231], 'grassland']]:  # cropland or grassland
@@ -305,6 +337,7 @@ def nuts_wrapper(row, settings):
                     for year_potential in [2035, 2050]:
                         logger.info(f'{row.NUTS_ID} Compute scenario with year_potential = {year_potential}')
                         settings_nuts["SCENARIO_SPECS"]["Year_potential"] = year_potential
+                        # settings_nuts["DATASETS"]["AFFORESTATION_SUITABILITY"]["EU4Trees"]
                         df_stats_NUTS = calc_stats_biomass_NUTS(os.path.join(
                             settings_nuts.get('CONFIG_SPECS').get('Basefolder_output'),
                             'LB_scenario', 
@@ -353,12 +386,16 @@ if __name__ == '__main__':
     # TODO filter NUTS with FOREST ZONE LUT 
     df_LUT_forest_zones = pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('forest_zone_dir')))
     shp_NUTS_filtered = shp_NUTS.loc[shp_NUTS.NUTS_ID.isin(df_LUT_forest_zones.NUTS_LEVEL3_ID) ]
-    ddf = dask_geopandas.from_geopandas(shp_NUTS_filtered, npartitions=8)
+    shp_NUTS_filtered = shp_NUTS_filtered[shp_NUTS_filtered.notna()]
+    # run local
+    # stats = shp_NUTS_filtered[:1].apply(lambda row: nuts_wrapper(row, settings), axis=1)
+
+    # run with parallelization
+    ddf = dask_geopandas.from_geopandas(shp_NUTS_filtered, npartitions=8*3)
     # ddf = ddf.spatial_shuffle()
  
     client=Client()
     print(client.dashboard_link)
-    with performance_report(filename="afforestation_dask-report.html"):
+    with performance_report(filename="LB_increase_afforestation_grassland_cropland_IPCCTier2_V20231002_JRCV4.html"):
         stats = ddf.apply(lambda row: nuts_wrapper(row, settings), axis=1, meta=('x', 'object')).compute()
-    # stats = shp_NUTS_filtered[:5].apply(lambda row: nuts_wrapper(row, settings), axis=1)
     client.shutdown()
