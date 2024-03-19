@@ -2,6 +2,7 @@ ETC/CA LULUCF repository:
 
 In this EEA repository the work done for the creation of a carbon sequestration potential map compatible with the LULUCF regulation will be shared.
 
+[<img src="flowcharts/carbon_sequestration.jpg" width="100"/>](flowcharts/carbon_sequestration.jpg)
 
 
 
@@ -15,15 +16,19 @@ Repo structure:
 
 
 ---------------------------------------------
-Main scripts:
+**Main scripts:**
 
 * **Afforestation on living biomass**: Scripts\Biomass\LB_increase_afforestation_grassland_cropland_IPCCTier2_V20231002.py 
-   (using Natura2000, ex-wetland,peatland,... data)
+   
+   >(using Natura2000, ex-wetland,peatland,... data)
    Updated should be done in this script and the helper function: https://github.com/eea/ETC-LULUCF/blob/master/src/Biomass/utils/biom_helper_functions.py)
     * All ouputs and inputs are stored on the CWS: \\cwsfileserver\projects\lulucf\f02_data\carbon_model_data\
         * input\
         * output\
 --------------------------------------------
+
+
+
 
 
 
