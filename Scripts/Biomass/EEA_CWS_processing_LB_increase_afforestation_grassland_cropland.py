@@ -80,8 +80,8 @@ print ("----------------------------------------------------------------")
 #############part1 reading the LB results by NUTS3 region from the scenario:
 
 ####set outputfolder of BIOMASS - aff - scenario:
-LB_afforestation_results_folder = r'L:\f02_data\carbon_model_data\output\LB_NUTS_stats'
-#LB_afforestation_results_folder = r'L:\f02_data\carbon_model_data\output\LB_NUTS_stats_testing'
+LB_afforestation_results_folder = r'L:\f02_data\carbon_model_data\output\LB_NUTS_stat'
+
 
 
 df_list =[]
@@ -108,7 +108,7 @@ print (combined_df)
 #name_of_table = name_of_table
 export_df_to_sql = combined_df  # dataframe to be exported
 schmema_name = SCHEMA
-name_of_table = 'LB_increase_afforestation_grassland_cropland_nuts3_draft'
+name_of_table = 'LB_increase_afforestation_grassland_cropland_nuts3'
 ###################################################
 export_df_to_sql.to_sql(name_of_table, engine_GREENMONKEY,  schema=schmema_name,if_exists='replace')
 print ("end storing on SQL")
@@ -118,7 +118,7 @@ print ("end storing on SQL")
 
 
 
-### QC:####
+### QC:#### to check the
 '''
 Select * from 
   FROM [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3_draft
@@ -129,4 +129,14 @@ Select * from
   [Tree_species_factor] ='Fraxinus_excelsior'and 
   [land_use_selection] = 'grassland'and 
   [perc_reforest] = 10
+'''
+
+####  update attributes
+'''
+ CONCAT(  'NUTS_ID_', [NUTS_ID],
+	'_Tree_species_',[Tree_species_factor],
+	'_perc_reforest_',[perc_reforest],
+	'_RCP_',[RCP],
+	'_Year_potential_',[Year_potential],
+	'_land_use_selection_',[land_use_selection]) as model_parameter
 '''
