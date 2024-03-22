@@ -140,3 +140,17 @@ Select * from
 	'_Year_potential_',[Year_potential],
 	'_land_use_selection_',[land_use_selection]) as model_parameter
 '''
+
+
+## add:join forest zone to output:
+'''
+,[FOREST_ZONE]
+,[NUTS_LEVEL0_ID]
+	into [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3_2]
+  FROM [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3]
+
+  left join 
+[szenario_afforestation].[LUT_FOREST_ZONE] on[LUT_FOREST_ZONE].[NUTS_LEVEL3_ID] = [LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_ID]
+
+
+'''
