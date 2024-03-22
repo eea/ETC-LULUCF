@@ -154,3 +154,73 @@ Select * from
 
 
 '''
+
+
+## add: group by tree gourps and FGS:
+'''
+/****** Script for SelectTopNRows command from SSMS  ******/
+drop table if exists [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3_forest_group]
+go
+
+
+SELECT 
+     
+       [LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_ID]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_LEVEL]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Slope_factor]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Slope_src]
+
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[perc_reforest]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[perc_reforest_src]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[RCP]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Year_potential]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FT]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FGS]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[land_use_selection]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FOREST_ZONE]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_LEVEL0_ID]
+
+	  ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_avg]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_avg]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_min]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_min]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_max]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_max]
+
+
+	  ,sum([nr_pixels]) as      [nr_pixels]
+  into [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3_forest_group]
+
+  FROM [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3]
+
+  left join [szenario_afforestation].[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS]
+  on [LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[FGS]  =[LB_increase_afforestation_grassland_cropland_nuts3].[FGS] AND
+  [LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[FOREST_ZONE]  =[LB_increase_afforestation_grassland_cropland_nuts3].[FOREST_ZONE] 
+
+  group by 
+    
+       [LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_ID]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_LEVEL]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Slope_factor]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Slope_src]
+
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[perc_reforest]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[perc_reforest_src]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[RCP]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Year_potential]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FT]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FGS]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[land_use_selection]
+  
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FOREST_ZONE]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_LEVEL0_ID]
+	  
+	  ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_avg]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_avg]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_min]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_min]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_max]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_max]
+
+
+'''
