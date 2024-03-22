@@ -224,3 +224,30 @@ SELECT
 
 
 '''
+
+
+
+### update : change group with max area:
+
+'''
+SELECT
+       [NUTS_ID]
+      ,[Tree_species_factor]
+      ,[Year_potential]
+      ,[FT]
+      ,[FGS]
+      ,[land_use_selection]
+      ,[FOREST_ZONE]
+ 
+	  ,  [nr_pixels]
+  FROM [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3]
+
+  where [NUTS_ID] = 'AT124'  order by     [NUTS_ID]
+   
+      ,[Year_potential]
+      ,[FT]
+      ,[FGS]
+      ,[land_use_selection]
+      ,[FOREST_ZONE], [nr_pixels] desc
+
+'''
