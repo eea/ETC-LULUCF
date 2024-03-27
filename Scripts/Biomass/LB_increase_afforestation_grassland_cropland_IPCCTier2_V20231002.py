@@ -126,7 +126,7 @@ def get_settings():
     # define the yield table LUT and forest zone LUT
     # location that should be used for processing
     name_yield_table_LUT = 'LUT_C_SEQ_AFFOR_JRC_V4.csv'
-    name_LUT_forest_zones = 'LUT_FOREST_ZONE.csv'
+    name_LUT_forest_zones = 'LUT_FOREST_ZONE_V4.csv'
     folder_JRC_table = os.path.join(Basefolder_output, 'NUTS_LUT_afforestation_scenario',
                                     'JRC_yield_table')
     yield_table_LUT_dir = os.path.join(folder_JRC_table, name_yield_table_LUT)
@@ -275,6 +275,10 @@ def nuts_wrapper(row, settings):
         logger.info(f'{row.NUTS_ID} Statistics already exist')
         return pd.DataFrame(data=[])    
 
+    # Load the LUT with info on the EU4trees and the IPCC related volume increment
+    df_trees_biom_increment = pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('yield_table_dir')))
+    # Load the LUT that related to each NUTS region the coresponding forest zone
+    df_LUT_forest_zones = pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('forest_zone_dir')))
     # update of LUT species
     #https://github.com/VITObelgium/ETC-CCA-LULUCF/blob/master/notebooks/output/NUTS_LUT_afforestation_scenario/JRC_yield_table/LUT_C_SEQ_AFFOR_JRC_V4.csv
     tree_species =[
@@ -313,27 +317,31 @@ def nuts_wrapper(row, settings):
         affor_mask_layer = define_affor_areas(settings_nuts)
 
         # for intensity in [10, 20, 50]:
-        # settings_nuts['SCENARIO_SPECS']['afforestation_config']['Perc_reforest'] = intensity
-        # logger.info(f'{row.NUTS_ID} Compute scenario with % reforestation = {intensity}')
+        intensity = 10
+        settings_nuts['SCENARIO_SPECS']['afforestation_config']['Perc_reforest'] = intensity
+        logger.info(f'{row.NUTS_ID} Compute scenario with % reforestation = {intensity}')
         for tree in tree_species:
-            logger.info(f'{row.NUTS_ID}  Compute scenario with tree species = {tree}')
-            settings_nuts['SCENARIO_SPECS']['afforestation_config']['Tree_species'] = tree
-            
-            logger.info(f'{row.NUTS_ID} Compute afforestation potential layer')
-            affor_potential_layer, outname_affor_pot = create_affor_potential(settings_nuts, affor_mask_layer)
-
-            if(affor_potential_layer is None):
-                logger.warning(f'{row.NUTS_ID} tree species: {tree} land use: {land_use_selection} skipped')
+            Forest_zone = df_LUT_forest_zones.loc[df_LUT_forest_zones['NUTS_LEVEL3_ID'] == row.NUTS_ID]['FOREST_ZONE'].values[0]
+            NUTS_forest_zone_trees = df_trees_biom_increment.loc[df_trees_biom_increment['FOREST_ZONE'] == Forest_zone]['SPECIES_NAME'].tolist()
+            if(tree in NUTS_forest_zone_trees): # check if tree species appears in NUTS region
+                logger.info(f'{row.NUTS_ID}  Compute scenario with tree species = {tree}')
+                settings_nuts['SCENARIO_SPECS']['afforestation_config']['Tree_species'] = tree
                 
-            elif(outname_affor_pot == -1): 
-                logger.warning(f'Skipping region {row.NUTS_ID}')
-                pd.DataFrame(data=[]).to_csv(Path(outfolder).joinpath(outname))
-                return pd.DataFrame(data=[])
-            else:
-                logger.info(f'{row.NUTS_ID} Compute stats')
-                for intensity in [10, 20, 50]:
-                    settings_nuts['SCENARIO_SPECS']['afforestation_config']['Perc_reforest'] = intensity
-                    logger.info(f'{row.NUTS_ID} Compute scenario with % reforestation = {intensity}')
+                logger.info(f'{row.NUTS_ID} Compute afforestation potential layer')
+                affor_potential_layer, outname_affor_pot = create_affor_potential(settings_nuts, affor_mask_layer)
+
+                if(affor_potential_layer is None):
+                    logger.warning(f'{row.NUTS_ID} tree species: {tree} land use: {land_use_selection} skipped')
+                    
+                elif(outname_affor_pot == -1): 
+                    logger.warning(f'Skipping region {row.NUTS_ID}')
+                    pd.DataFrame(data=[]).to_csv(Path(outfolder).joinpath(outname))
+                    return pd.DataFrame(data=[])
+                else:
+                    logger.info(f'{row.NUTS_ID} Compute stats')
+                    # for intensity in [10, 20, 50]:
+                    # settings_nuts['SCENARIO_SPECS']['afforestation_config']['Perc_reforest'] = intensity
+                    # logger.info(f'{row.NUTS_ID} Compute scenario with % reforestation = {intensity}')
                     for year_potential in [2035, 2050]:
                         logger.info(f'{row.NUTS_ID} Compute scenario with year_potential = {year_potential}')
                         settings_nuts["SCENARIO_SPECS"]["Year_potential"] = year_potential
@@ -345,9 +353,14 @@ def nuts_wrapper(row, settings):
                             outname_affor_pot),
                             settings_nuts.get('NUTS3_info'),
                             settings_nuts)
-                        df_stats_NUTS['land_use_selection'] = land_use_selection
-                        df_stats_NUTS['scenario_name'] = f"{intensity}_{tree}_{land_use_selection}"
-                        lst_NUTS_stats.append(df_stats_NUTS)
+                        df_stats_NUTS['land_use_selection'] = settings_nuts['SCENARIO_SPECS']['lst_CLC_affor_name']
+                        df_stats_NUTS['scenario_name'] = f"{settings_nuts['SCENARIO_SPECS']['afforestation_config']['Perc_reforest']}_{settings_nuts['SCENARIO_SPECS']['afforestation_config']['Tree_species']}_{settings_nuts['SCENARIO_SPECS']['lst_CLC_affor_name']}"
+                        if(settings_nuts['SCENARIO_SPECS']['afforestation_config']['Perc_reforest'] == intensity and
+                        settings_nuts['SCENARIO_SPECS']['afforestation_config']['Tree_species'] == tree and
+                        settings_nuts['SCENARIO_SPECS']['lst_CLC_affor_name'] == land_use_selection):
+                            lst_NUTS_stats.append(df_stats_NUTS)
+                        else:
+                            ValueError(f"scenario name does not match for NUTS {row.NUTS_ID} and settings {settings_nuts}")
 
     # merge all the statistics of each NUTS-3 region
     # in a single summary dataframe
@@ -386,16 +399,17 @@ if __name__ == '__main__':
     # TODO filter NUTS with FOREST ZONE LUT 
     df_LUT_forest_zones = pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('forest_zone_dir')))
     shp_NUTS_filtered = shp_NUTS.loc[shp_NUTS.NUTS_ID.isin(df_LUT_forest_zones.NUTS_LEVEL3_ID) ]
-    shp_NUTS_filtered = shp_NUTS_filtered[shp_NUTS_filtered.notna()]
+    # shp_NUTS_filtered = shp_NUTS_filtered[shp_NUTS_filtered.notna()]
+    shp_NUTS_filtered = shp_NUTS_filtered[shp_NUTS_filtered.CNTR_CODE == 'EL']
     # run local
-    # stats = shp_NUTS_filtered[:1].apply(lambda row: nuts_wrapper(row, settings), axis=1)
+    stats = shp_NUTS_filtered.apply(lambda row: nuts_wrapper(row, settings), axis=1)
 
     # run with parallelization
-    ddf = dask_geopandas.from_geopandas(shp_NUTS_filtered, npartitions=8*3)
+    # ddf = dask_geopandas.from_geopandas(shp_NUTS_filtered, npartitions=8) # 6hrs with 24 partitions
     # ddf = ddf.spatial_shuffle()
  
-    client=Client()
-    print(client.dashboard_link)
-    with performance_report(filename="LB_increase_afforestation_grassland_cropland_IPCCTier2_V20231002_JRCV4.html"):
-        stats = ddf.apply(lambda row: nuts_wrapper(row, settings), axis=1, meta=('x', 'object')).compute()
-    client.shutdown()
+    # client=Client()
+    # print(client.dashboard_link)
+    # with performance_report(filename="LB_increase_afforestation_grassland_cropland_IPCCTier2_V20231002_JRCV4_intensity10_ELnuts.html"):
+    #     stats = ddf.apply(lambda row: nuts_wrapper(row, settings), axis=1, meta=('x', 'object')).compute()
+    # client.shutdown()
