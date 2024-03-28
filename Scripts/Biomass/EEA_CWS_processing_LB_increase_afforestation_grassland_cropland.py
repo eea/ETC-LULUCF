@@ -80,7 +80,9 @@ print ("----------------------------------------------------------------")
 #############part1 reading the LB results by NUTS3 region from the scenario:
 
 ####set outputfolder of BIOMASS - aff - scenario:
-LB_afforestation_results_folder = r'L:\f02_data\carbon_model_data\output\LB_NUTS_stat'
+LB_afforestation_results_folder = r'L:\f02_data\carbon_model_data\output\LB_NUTS_stats'
+
+
 
 
 
@@ -108,7 +110,7 @@ print (combined_df)
 #name_of_table = name_of_table
 export_df_to_sql = combined_df  # dataframe to be exported
 schmema_name = SCHEMA
-name_of_table = 'LB_increase_afforestation_grassland_cropland_nuts3'
+name_of_table = 'LB_increase_afforestation_grassland_cropland_nuts3_EL_updated'
 ###################################################
 export_df_to_sql.to_sql(name_of_table, engine_GREENMONKEY,  schema=schmema_name,if_exists='replace')
 print ("end storing on SQL")
@@ -118,112 +120,132 @@ print ("end storing on SQL")
 
 
 
-### QC:#### to check the
-'''
-Select * from 
-  FROM [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3_draft
 
-  where 
-  Nuts_ID = 'AT111' and  
-  [Year_potential] = 2035 and 
-  [Tree_species_factor] ='Fraxinus_excelsior'and 
-  [land_use_selection] = 'grassland'and 
-  [perc_reforest] = 10
-'''
 
-####  update attributes
-'''
- CONCAT(  'NUTS_ID_', [NUTS_ID],
-	'_Tree_species_',[Tree_species_factor],
-	'_perc_reforest_',[perc_reforest],
-	'_RCP_',[RCP],
-	'_Year_potential_',[Year_potential],
-	'_land_use_selection_',[land_use_selection]) as model_parameter
-'''
+
+### update tables:
+
+
+
+################################################################################## sql to dataframe:
+engine_GREENMONKEY = sa.create_engine('mssql+pyodbc://' + SERVER+ '/' + Database_name + '?trusted_connection=yes&driver=ODBC+Driver+17+for+SQL+Server')
+query_1=('''
+             SELECT * 
+         into [Carbon_Mapping].[szenario_afforestation].[LUT_trees_test]
+             FROM [Carbon_Mapping].[szenario_afforestation].[LUT_trees]
+             ''')  
+with engine_GREENMONKEY.begin() as conn:
+    query_1 =   text(query_check) 
+    conn.execute(query_1)
+  
+
+#print(readable_database)
+##################################################################################
+    
+
+
+# (1) update attributes:
+
+## new col:
+column_name = 'model_parameter'
+query_drop_column=('''      
+        ALTER TABLE '''+ schmema_name+'.'+name_of_table +''' 
+        DROP COLUMN if exists '''+column_name )  
+print (query_drop_column)
+with engine_GREENMONKEY.begin() as conn:
+    query_txt =   text(query_drop_column) 
+    conn.execute(query_txt)
+
+
+print ("--------------------------")
+query_1=('''      
+        ALTER TABLE '''+ schmema_name+'.'+name_of_table +''' 
+        ADD '''+column_name+''' varchar(2550);
+
+             ''')  
+print (query_1)
+with engine_GREENMONKEY.begin() as conn:
+    query_txt =   text(query_1) 
+    conn.execute(query_txt)
+
+
+
+## update col:
+
+query_1=('''         UPDATE ''' + schmema_name+'.'+name_of_table +''' 
+        set model_parameter =
+            CONCAT(  'NUTS_ID_', [NUTS_ID],
+                '_Tree_species_',[Tree_species_factor],
+                '_perc_reforest_',[perc_reforest],
+                '_RCP_',[RCP],
+                '_Year_potential_',[Year_potential],
+                '_land_use_selection_',[land_use_selection]) 
+             ''')  
+with engine_GREENMONKEY.begin() as conn:
+    query_txt =   text(query_1) 
+    conn.execute(query_txt)
+
+
+
+
+
 
 
 ## add:join forest zone to output:
-'''
-,[FOREST_ZONE]
-,[NUTS_LEVEL0_ID]
-	into [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3_2]
-  FROM [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3]
-
-  left join 
-[szenario_afforestation].[LUT_FOREST_ZONE] on[LUT_FOREST_ZONE].[NUTS_LEVEL3_ID] = [LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_ID]
-
-
-'''
-
-
-## add: group by tree gourps and FGS:
-'''
-/****** Script for SelectTopNRows command from SSMS  ******/
-drop table if exists [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3_forest_group]
-go
-
-
-SELECT 
-     
-       [LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_ID]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_LEVEL]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Slope_factor]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Slope_src]
-
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[perc_reforest]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[perc_reforest_src]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[RCP]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Year_potential]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FT]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FGS]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[land_use_selection]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FOREST_ZONE]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_LEVEL0_ID]
-
-	  ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_avg]
-      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_avg]
-      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_min]
-      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_min]
-      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_max]
-      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_max]
-
-
-	  ,sum([nr_pixels]) as      [nr_pixels]
-  into [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3_forest_group]
-
-  FROM [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3]
-
-  left join [szenario_afforestation].[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS]
-  on [LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[FGS]  =[LB_increase_afforestation_grassland_cropland_nuts3].[FGS] AND
-  [LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[FOREST_ZONE]  =[LB_increase_afforestation_grassland_cropland_nuts3].[FOREST_ZONE] 
-
-  group by 
-    
-       [LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_ID]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_LEVEL]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Slope_factor]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Slope_src]
-
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[perc_reforest]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[perc_reforest_src]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[RCP]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Year_potential]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FT]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FGS]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[land_use_selection]
-  
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FOREST_ZONE]
-      ,[LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_LEVEL0_ID]
-	  
-	  ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_avg]
-      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_avg]
-      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_min]
-      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_min]
-      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_max]
-      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_max]
+name_of_table_new  =  name_of_table+'_with_forest_zone'
+query_1=('''        
+      Drop table if exists ''' + schmema_name+'.'+name_of_table_new +''' 
+             ''')  
+with engine_GREENMONKEY.begin() as conn:
+    query_txt =   text(query_1) 
+    conn.execute(query_txt)
+# into  ''' + schmema_name+'.'+name_of_table_new +''' 
+## add:join forest zone to output:
+query_1=('''        
+      Select 
+             '''+name_of_table+'''.[index]
+            ,'''+name_of_table+'''.[LB_mean_yrly_age_0_20]
+            ,'''+name_of_table+'''.[LB_mean_yrly_age_21_30]
+            ,'''+name_of_table+'''.[LB_min_yrly_age_0_20]
+            ,'''+name_of_table+'''.[LB_min_yrly_age_21_30]
+            ,'''+name_of_table+'''.[LB_max_yrly_age_0_20]
+            ,'''+name_of_table+'''.[LB_max_yrly_age_21_30]
+            ,'''+name_of_table+'''.[nr_pixels]
+            ,'''+name_of_table+'''.[LB_total_2035_avg]
+            ,'''+name_of_table+'''.[LB_total_2035_min]
+            ,'''+name_of_table+'''.[LB_total_2035_max]
+            ,'''+name_of_table+'''.[NUTS_ID]
+            ,'''+name_of_table+'''.[NUTS_LEVEL]
+            ,'''+name_of_table+'''.[Slope_factor]
+            ,'''+name_of_table+'''.[Slope_src]
+            ,'''+name_of_table+'''.[Tree_prob]
+            ,'''+name_of_table+'''.[Tree_prob_src]
+            ,'''+name_of_table+'''.[Tree_species_factor]
+            ,'''+name_of_table+'''.[Tree_species_src]
+            ,'''+name_of_table+'''.[perc_reforest]
+            ,'''+name_of_table+'''.[perc_reforest_src]
+            ,'''+name_of_table+'''.[RCP]
+            ,'''+name_of_table+'''.[Year_potential]
+            ,'''+name_of_table+'''.[FT]
+            ,'''+name_of_table+'''.[FGS]
+            ,'''+name_of_table+'''.[land_use_selection]
+            ,'''+name_of_table+'''.[scenario_name]
+            ,'''+name_of_table+'''.[LB_total_2050_avg]
+            ,'''+name_of_table+'''.[LB_total_2050_min]
+            ,'''+name_of_table+'''.[LB_total_2050_max]
+            ,'''+name_of_table+'''.[model_parameter]
+                
+         ,LUT_FOREST_ZONE_v4.FOREST_ZONE 
+         into  ''' + schmema_name+'.'+name_of_table_new +''' 
+         from ''' +  schmema_name+'.'+name_of_table      +'''
+      left join  [szenario_afforestation].[LUT_FOREST_ZONE_v4] 
+         on [LUT_FOREST_ZONE_v4].[NUTS_LEVEL3_ID] = [LB_increase_afforestation_grassland_cropland_nuts3_EL_updated].[NUTS_ID] 
+             ''')  
+with engine_GREENMONKEY.begin() as conn:
+    query_txt =   text(query_1) 
+    conn.execute(query_txt)
 
 
-'''
 
 
 
@@ -251,3 +273,80 @@ SELECT
       ,[FOREST_ZONE], [nr_pixels] desc
 
 '''
+
+### get max area of afforestation for group:
+
+'''
+
+	 
+
+	
+
+
+	  SELECT
+       [LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_ID]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Year_potential]
+
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FGS]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[land_use_selection]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FOREST_ZONE]
+	  ,max([LB_increase_afforestation_grassland_cropland_nuts3].[nr_pixels]) as max_nr_pixels
+
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_avg]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_avg]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_min]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_min]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_max]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_max]
+
+
+  FROM [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3]
+
+
+  left join [szenario_afforestation].[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS] on 
+
+[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[FGS]         =[LB_increase_afforestation_grassland_cropland_nuts3].[FGS] AND
+[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[FOREST_ZONE]= [LB_increase_afforestation_grassland_cropland_nuts3].[FOREST_ZONE]
+
+  ----where [NUTS_ID] = 'AT124' ----and [LB_increase_afforestation_grassland_cropland_nuts3].[FGS] = 'F'
+
+group by 
+	   [LB_increase_afforestation_grassland_cropland_nuts3].[NUTS_ID]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[Year_potential]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FGS]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[land_use_selection]
+      ,[LB_increase_afforestation_grassland_cropland_nuts3].[FOREST_ZONE]
+	  ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_avg]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_avg]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_min]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_min]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_0_20_max]
+      ,[LUT_C_SEQ_AFFOR_JRC_V4_GROUPED_FGS].[yrl_C_seq_age_21_30_max]
+	   order by     [NUTS_ID]
+'''
+
+
+
+print(
+'''
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡠⣄⡀⠀⠀⡠⠞⠛⢦⣠⢤⡀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⢠⠏⠀⠀⢱⡀⣸⠁⠀⡴⠋⠀⠀⣹⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡴⠋⠉⢿⢀⡤⠶⣴⠇⣯⠀⣼⠁⠀⢀⡴⠷⣄
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⠞⠁⠀⣀⡾⠋⠀⠀⢹⣼⠁⢠⡇⠀⡴⠋⠀⠀⡼
+⠀⠀⠀⠀⢠⠊⠑⢦⠀⡴⠋⢀⣠⠞⠉⠀⠀⠀⣠⣿⠧⣄⡾⠁⡼⠁⣀⣤⠾⡁
+⠀⠀⠀⠀⢸⠀⠀⣨⠟⠁⢠⡞⠁⠀⠀⠀⣠⡾⠛⠁⠀⣿⠃⣰⠃⣴⠋⠀⠀⣷
+⠀⠀⠀⠀⣸⢠⠞⠁⠀⢠⠏⠀⠀⢀⡴⠋⠁⠀⢀⣠⡴⠿⣶⡇⢰⠇⠀⠀⢠⠇
+⠀⠀⠀⢠⢿⠏⠀⠀⠀⠉⠀⠀⣠⠞⠁⠀⡴⠚⠉⠁⠀⢀⡟⠀⣼⠀⠀⠀⢸⠀
+⠀⠀⠀⡾⣼⢀⠀⠀⠀⠀⠀⠈⠉⠀⣠⠞⠁⠀⠀⢀⡴⠋⠙⢼⠃⠀⠀⠀⣸⠀
+⠀⠀⠀⡇⠉⡎⠀⣰⠃⠀⠀⠀⠀⠀⠁⠀⠀⠀⡼⠉⠀⠀⠀⠘⠂⠀⠀⣠⠇⠀
+⠀⠀⠀⡇⢸⠀⣰⠃⠀⡴⠀⠀⠀⠀⠀⠀⣠⠞⠁⠀⠀⠀⠀⠀⠀⣠⠖⠁⠀⠀
+⠀⠀⢸⠁⡏⢠⠃⢀⠞⠀⠀⠀⠀⠀⠀⢸⠁⠀⠀⠀⠀⢀⣠⠖⠋⠁⠀⠀⠀⠀
+⠀⠀⡞⠀⠃⡎⢀⠏⠀⠀⠀⠀⠀⠀⢀⡏⠀⣀⡤⠴⠚⠉⠀⠀⠀⠀⠀⠀⠀⠀
+⡴⢺⠇⠀⠀⠀⠞⠀⠀⠀⠀⠀⠀⢀⡾⠒⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⡇⠘⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⠞⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⢳⡀⠘⢦⡀⠀⠀⠀⠀⠀⠀⡰⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠳⣄⠀⠙⠲⣤⣀⣠⠴⠊⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠈⠓⠦⣄⣀⡠⠎⠀
+''')
+
+print ("job done")
