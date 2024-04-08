@@ -526,10 +526,10 @@ def create_affor_potential(settings, affor_mask_array):
             
             # search for any increment data
             
-            no_avail = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))].empty
-            if no_avail:# TODO skip in the next iterations
-                logger.warning(f'No yield information available for {NUTS3_ID} in FOREST ZONE {Forest_zone} and species {tree_species}')
-                return None, None
+            # no_avail = df_trees_biom_increment.loc[((df_trees_biom_increment['FOREST_ZONE'] == Forest_zone) & (df_trees_biom_increment['SPECIES_NAME'] == tree_species))].empty
+            # if no_avail:# 
+            #     logger.warning(f'No yield information available for {NUTS3_ID} in FOREST ZONE {Forest_zone} and species {tree_species}')
+            #     return None, None
             
             # These could not be NUTS specific factors and hence are
             # directly loaded from the default configuration
