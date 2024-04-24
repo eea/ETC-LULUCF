@@ -4,31 +4,15 @@
 # #### Load and (install) used packages
 
 import os
-import glob
 from pathlib import Path
 import geopandas as gpd
 from loguru import logger
-from pathlib import Path, WindowsPath
+from pathlib import Path
 #import geopandas as gpd
 import sys
-import matplotlib.pyplot as plt
-import logging
-import rasterio
-import rasterio.mask
-import numpy as np
-from osgeo import gdal
-import subprocess
-from osgeo import osr
 import pandas as pd
-import pprint
-import datetime
-import pyodbc 
-import sqlalchemy as sa
-from sqlalchemy import create_engine, event
-from sqlalchemy.engine.url import URL
-import json
 import dask_geopandas
-from dask.distributed import LocalCluster, Client, performance_report
+from dask.distributed import Client, performance_report
 
 ### location of the code to run the scenarios
 sys.path.append(Path(os.getcwd()).joinpath('src').as_posix())
@@ -41,14 +25,12 @@ from constants import (
 
 from Biomass.utils.biom_helper_functions import *
 sys.path.append(Path(os.getcwd()).joinpath('Scripts').as_posix())
-from SOC.SOC_stratification import SOC_strat_IPCC_block_proc
-from Biomass.run_afforestation_scenario import afforestation_LUT_block_proc
 
 @logger.catch()
 def get_settings():
     logger.info('Get settings')
     # Year_potential = 2035
-    Year_baseline = 2024
+    Year_baseline = 2025
 
     # define which management action is applied
     mng_option = 'afforestation'
@@ -269,7 +251,7 @@ def nuts_wrapper(row, settings):
     settings_nuts['NUTS3_info'] = row
 
     outfolder = Path(settings.get('CONFIG_SPECS').get('Basefolder_output')).joinpath(
-                    f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_NUTS_stats')
+                    f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_NUTS_stats_baseline2025')
     outname = f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_stats_NUTS_EEA39_{settings.get("CONFIG_SPECS").get("scenario_name")}_{row.NUTS_ID}.csv'
     if(os.path.exists(Path(outfolder).joinpath(outname))):
         logger.info(f'{row.NUTS_ID} Statistics already exist')
@@ -372,7 +354,7 @@ def nuts_wrapper(row, settings):
         # df_stats_NUTS_final = calc_weighted_average_NUTS(
         #     df_stats_all_NUTS3, gpd.read_file(settings.get('DATASETS').get('VECTORS').get('NUTS')))
         outfolder = Path(settings.get('CONFIG_SPECS').get('Basefolder_output')).joinpath(
-                    f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_NUTS_stats')
+                    f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_NUTS_stats_baseline2025')
         outname = f'{settings.get("SCENARIO_SPECS").get("carbon_pool")}_stats_NUTS_EEA39_{settings.get("CONFIG_SPECS").get("scenario_name")}_{row.NUTS_ID}.csv'
         outfolder.mkdir(parents=True, exist_ok=True)
         df_stats_all_NUTS3.to_csv(Path(outfolder).joinpath(outname))
@@ -400,16 +382,16 @@ if __name__ == '__main__':
     df_LUT_forest_zones = pd.read_csv(os.path.join(settings.get('CONFIG_SPECS').get('forest_zone_dir')))
     shp_NUTS_filtered = shp_NUTS.loc[shp_NUTS.NUTS_ID.isin(df_LUT_forest_zones.NUTS_LEVEL3_ID) ]
     # shp_NUTS_filtered = shp_NUTS_filtered[shp_NUTS_filtered.notna()]
-    shp_NUTS_filtered = shp_NUTS_filtered[shp_NUTS_filtered.CNTR_CODE == 'EL']
+    # shp_NUTS_filtered = shp_NUTS_filtered[shp_NUTS_filtered.CNTR_CODE == 'EL']
     # run local
-    stats = shp_NUTS_filtered.apply(lambda row: nuts_wrapper(row, settings), axis=1)
+    # stats = shp_NUTS_filtered.apply(lambda row: nuts_wrapper(row, settings), axis=1)
 
     # run with parallelization
-    # ddf = dask_geopandas.from_geopandas(shp_NUTS_filtered, npartitions=8) # 6hrs with 24 partitions
+    ddf = dask_geopandas.from_geopandas(shp_NUTS_filtered, npartitions=8) # 6hrs with 24 partitions
     # ddf = ddf.spatial_shuffle()
  
-    # client=Client()
-    # print(client.dashboard_link)
-    # with performance_report(filename="LB_increase_afforestation_grassland_cropland_IPCCTier2_V20231002_JRCV4_intensity10_ELnuts.html"):
-    #     stats = ddf.apply(lambda row: nuts_wrapper(row, settings), axis=1, meta=('x', 'object')).compute()
-    # client.shutdown()
+    client=Client()
+    print(client.dashboard_link)
+    with performance_report(filename="LB_increase_afforestation_grassland_cropland_IPCCTier2_V20231002_JRCV4_int10_baseline2025_24042024.html"):
+        stats = ddf.apply(lambda row: nuts_wrapper(row, settings), axis=1, meta=('x', 'object')).compute()
+    client.shutdown()
