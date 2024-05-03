@@ -1,3 +1,5 @@
 *.log
 *.html
 *.pyc
+Scripts/Biomass/LB_increase_afforestation_grassland_cropland_IPCCTier2_V2024.py
+database.ini
