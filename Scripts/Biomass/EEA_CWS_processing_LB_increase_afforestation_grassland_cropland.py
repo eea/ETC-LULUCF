@@ -238,12 +238,22 @@ query_1=('''
          ,LUT_FOREST_ZONE_v4.FOREST_ZONE 
          into  ''' + schmema_name+'.'+name_of_table_new +''' 
          from ''' +  schmema_name+'.'+name_of_table      +'''
-      left join  [szenario_afforestation].[LUT_FOREST_ZONE_v4] 
+      left join  [szenario_afforestation].[LUT_FOREST_ZONE_V4] 
          on [LUT_FOREST_ZONE_v4].[NUTS_LEVEL3_ID] = [LB_increase_afforestation_grassland_cropland_nuts3_EL_updated].[NUTS_ID] 
              ''')  
 with engine_GREENMONKEY.begin() as conn:
     query_txt =   text(query_1) 
     conn.execute(query_txt)
+
+
+
+#     update u
+#   set u.[FGS] = s.[FGS]
+#   from [Carbon_Mapping].[szenario_afforestation].[LB_increase_afforestation_grassland_cropland_nuts3_EL_updated_with_forest_zone] u
+#       left join [szenario_afforestation].[LUT_C_SEQ_AFFOR_JRC_V6]  s on
+#           u.[Tree_species_factor] = s.[SPECIES_NAME]
+
+
 
 
 
@@ -345,6 +355,7 @@ print(
 ⡴⢺⠇⠀⠀⠀⠞⠀⠀⠀⠀⠀⠀⢀⡾⠒⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⡇⠘⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⠞⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⢳⡀⠘⢦⡀⠀⠀⠀⠀⠀⠀⡰⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+
 ⠀⠳⣄⠀⠙⠲⣤⣀⣠⠴⠊⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠈⠓⠦⣄⣀⡠⠎⠀
 ''')
